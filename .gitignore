@@ -1,0 +1,16 @@
+# Build output
+/build*/
+CMakeUserPresets.json
+CMakeLists.txt.user*
+
+# Local toolchain (CMake, Ninja, Qt) managed by the developer
+/.toolchain/
+aqtinstall.log
+
+# Original backup archive (kept locally, too large for git)
+/Sondepredict_files.7z
+
+# Editors
+.idea/
+.vscode/
+*.swp

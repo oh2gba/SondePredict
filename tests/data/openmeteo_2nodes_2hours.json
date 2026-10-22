@@ -1,0 +1,899 @@
+[
+ {
+  "latitude": 60.741943,
+  "longitude": 23.554688,
+  "generationtime_ms": 285.6731414794922,
+  "utc_offset_seconds": 0,
+  "timezone": "GMT",
+  "timezone_abbreviation": "GMT",
+  "elevation": 100.0,
+  "hourly_units": {
+   "time": "unixtime",
+   "wind_speed_10m": "m/s",
+   "wind_direction_10m": "\u00b0",
+   "wind_speed_1000hPa": "m/s",
+   "wind_direction_1000hPa": "\u00b0",
+   "geopotential_height_1000hPa": "m",
+   "wind_speed_975hPa": "m/s",
+   "wind_direction_975hPa": "\u00b0",
+   "geopotential_height_975hPa": "m",
+   "wind_speed_950hPa": "m/s",
+   "wind_direction_950hPa": "\u00b0",
+   "geopotential_height_950hPa": "m",
+   "wind_speed_925hPa": "m/s",
+   "wind_direction_925hPa": "\u00b0",
+   "geopotential_height_925hPa": "m",
+   "wind_speed_900hPa": "m/s",
+   "wind_direction_900hPa": "\u00b0",
+   "geopotential_height_900hPa": "m",
+   "wind_speed_850hPa": "m/s",
+   "wind_direction_850hPa": "\u00b0",
+   "geopotential_height_850hPa": "m",
+   "wind_speed_800hPa": "m/s",
+   "wind_direction_800hPa": "\u00b0",
+   "geopotential_height_800hPa": "m",
+   "wind_speed_750hPa": "m/s",
+   "wind_direction_750hPa": "\u00b0",
+   "geopotential_height_750hPa": "m",
+   "wind_speed_700hPa": "m/s",
+   "wind_direction_700hPa": "\u00b0",
+   "geopotential_height_700hPa": "m",
+   "wind_speed_650hPa": "m/s",
+   "wind_direction_650hPa": "\u00b0",
+   "geopotential_height_650hPa": "m",
+   "wind_speed_600hPa": "m/s",
+   "wind_direction_600hPa": "\u00b0",
+   "geopotential_height_600hPa": "m",
+   "wind_speed_550hPa": "m/s",
+   "wind_direction_550hPa": "\u00b0",
+   "geopotential_height_550hPa": "m",
+   "wind_speed_500hPa": "m/s",
+   "wind_direction_500hPa": "\u00b0",
+   "geopotential_height_500hPa": "m",
+   "wind_speed_450hPa": "m/s",
+   "wind_direction_450hPa": "\u00b0",
+   "geopotential_height_450hPa": "m",
+   "wind_speed_400hPa": "m/s",
+   "wind_direction_400hPa": "\u00b0",
+   "geopotential_height_400hPa": "m",
+   "wind_speed_350hPa": "m/s",
+   "wind_direction_350hPa": "\u00b0",
+   "geopotential_height_350hPa": "m",
+   "wind_speed_300hPa": "m/s",
+   "wind_direction_300hPa": "\u00b0",
+   "geopotential_height_300hPa": "m",
+   "wind_speed_250hPa": "m/s",
+   "wind_direction_250hPa": "\u00b0",
+   "geopotential_height_250hPa": "m",
+   "wind_speed_200hPa": "m/s",
+   "wind_direction_200hPa": "\u00b0",
+   "geopotential_height_200hPa": "m",
+   "wind_speed_150hPa": "m/s",
+   "wind_direction_150hPa": "\u00b0",
+   "geopotential_height_150hPa": "m",
+   "wind_speed_100hPa": "m/s",
+   "wind_direction_100hPa": "\u00b0",
+   "geopotential_height_100hPa": "m",
+   "wind_speed_70hPa": "m/s",
+   "wind_direction_70hPa": "\u00b0",
+   "geopotential_height_70hPa": "m",
+   "wind_speed_50hPa": "m/s",
+   "wind_direction_50hPa": "\u00b0",
+   "geopotential_height_50hPa": "m",
+   "wind_speed_40hPa": "m/s",
+   "wind_direction_40hPa": "\u00b0",
+   "geopotential_height_40hPa": "m",
+   "wind_speed_30hPa": "m/s",
+   "wind_direction_30hPa": "\u00b0",
+   "geopotential_height_30hPa": "m",
+   "wind_speed_20hPa": "m/s",
+   "wind_direction_20hPa": "\u00b0",
+   "geopotential_height_20hPa": "m",
+   "wind_speed_15hPa": "m/s",
+   "wind_direction_15hPa": "\u00b0",
+   "geopotential_height_15hPa": "m",
+   "wind_speed_10hPa": "m/s",
+   "wind_direction_10hPa": "\u00b0",
+   "geopotential_height_10hPa": "m"
+  },
+  "hourly": {
+   "time": [
+    1792753200,
+    1792756800
+   ],
+   "wind_speed_10m": [
+    4.69,
+    4.63
+   ],
+   "wind_direction_10m": [
+    124,
+    123
+   ],
+   "wind_speed_1000hPa": [
+    6.3,
+    5.96
+   ],
+   "wind_direction_1000hPa": [
+    126,
+    125
+   ],
+   "geopotential_height_1000hPa": [
+    142.0,
+    138.0
+   ],
+   "wind_speed_975hPa": [
+    10.38,
+    10.46
+   ],
+   "wind_direction_975hPa": [
+    130,
+    129
+   ],
+   "geopotential_height_975hPa": [
+    352.0,
+    348.0
+   ],
+   "wind_speed_950hPa": [
+    12.7,
+    12.6
+   ],
+   "wind_direction_950hPa": [
+    141,
+    140
+   ],
+   "geopotential_height_950hPa": [
+    566.0,
+    563.0
+   ],
+   "wind_speed_925hPa": [
+    14.91,
+    14.24
+   ],
+   "wind_direction_925hPa": [
+    161,
+    163
+   ],
+   "geopotential_height_925hPa": [
+    786.0,
+    783.0
+   ],
+   "wind_speed_900hPa": [
+    15.04,
+    14.78
+   ],
+   "wind_direction_900hPa": [
+    162,
+    165
+   ],
+   "geopotential_height_900hPa": [
+    1012.0,
+    1009.0
+   ],
+   "wind_speed_850hPa": [
+    15.13,
+    15.61
+   ],
+   "wind_direction_850hPa": [
+    162,
+    162
+   ],
+   "geopotential_height_850hPa": [
+    1481.0,
+    1477.0
+   ],
+   "wind_speed_800hPa": [
+    15.76,
+    16.21
+   ],
+   "wind_direction_800hPa": [
+    166,
+    162
+   ],
+   "geopotential_height_800hPa": [
+    1972.0,
+    1968.0
+   ],
+   "wind_speed_750hPa": [
+    16.55,
+    16.36
+   ],
+   "wind_direction_750hPa": [
+    163,
+    164
+   ],
+   "geopotential_height_750hPa": [
+    2486.0,
+    2482.0
+   ],
+   "wind_speed_700hPa": [
+    14.93,
+    14.14
+   ],
+   "wind_direction_700hPa": [
+    166,
+    171
+   ],
+   "geopotential_height_700hPa": [
+    3028.0,
+    3025.0
+   ],
+   "wind_speed_650hPa": [
+    13.08,
+    13.23
+   ],
+   "wind_direction_650hPa": [
+    167,
+    168
+   ],
+   "geopotential_height_650hPa": [
+    3610.0,
+    3606.0
+   ],
+   "wind_speed_600hPa": [
+    12.57,
+    13.07
+   ],
+   "wind_direction_600hPa": [
+    167,
+    167
+   ],
+   "geopotential_height_600hPa": [
+    4229.0,
+    4225.0
+   ],
+   "wind_speed_550hPa": [
+    12.89,
+    12.62
+   ],
+   "wind_direction_550hPa": [
+    170,
+    170
+   ],
+   "geopotential_height_550hPa": [
+    4891.0,
+    4887.0
+   ],
+   "wind_speed_500hPa": [
+    12.78,
+    12.68
+   ],
+   "wind_direction_500hPa": [
+    173,
+    177
+   ],
+   "geopotential_height_500hPa": [
+    5602.0,
+    5600.0
+   ],
+   "wind_speed_450hPa": [
+    12.07,
+    12.82
+   ],
+   "wind_direction_450hPa": [
+    174,
+    171
+   ],
+   "geopotential_height_450hPa": [
+    6371.27,
+    6370.17
+   ],
+   "wind_speed_400hPa": [
+    10.92,
+    13.83
+   ],
+   "wind_direction_400hPa": [
+    192,
+    195
+   ],
+   "geopotential_height_400hPa": [
+    7209.88,
+    7209.88
+   ],
+   "wind_speed_350hPa": [
+    12.29,
+    11.55
+   ],
+   "wind_direction_350hPa": [
+    221,
+    226
+   ],
+   "geopotential_height_350hPa": [
+    8135.66,
+    8138.46
+   ],
+   "wind_speed_300hPa": [
+    10.2,
+    8.69
+   ],
+   "wind_direction_300hPa": [
+    259,
+    238
+   ],
+   "geopotential_height_300hPa": [
+    9172.58,
+    9177.42
+   ],
+   "wind_speed_250hPa": [
+    11.31,
+    11.08
+   ],
+   "wind_direction_250hPa": [
+    225,
+    224
+   ],
+   "geopotential_height_250hPa": [
+    10361.91,
+    10363.81
+   ],
+   "wind_speed_200hPa": [
+    10.05,
+    10.42
+   ],
+   "wind_direction_200hPa": [
+    186,
+    187
+   ],
+   "geopotential_height_200hPa": [
+    11788.37,
+    11786.05
+   ],
+   "wind_speed_150hPa": [
+    12.37,
+    12.05
+   ],
+   "wind_direction_150hPa": [
+    185,
+    194
+   ],
+   "geopotential_height_150hPa": [
+    13635.82,
+    13635.82
+   ],
+   "wind_speed_100hPa": [
+    12.07,
+    11.84
+   ],
+   "wind_direction_100hPa": [
+    186,
+    190
+   ],
+   "geopotential_height_100hPa": [
+    16220.83,
+    16220.83
+   ],
+   "wind_speed_70hPa": [
+    6.32,
+    6.26
+   ],
+   "wind_direction_70hPa": [
+    198,
+    205
+   ],
+   "geopotential_height_70hPa": [
+    18475.41,
+    18475.41
+   ],
+   "wind_speed_50hPa": [
+    4.48,
+    4.07
+   ],
+   "wind_direction_50hPa": [
+    228,
+    235
+   ],
+   "geopotential_height_50hPa": [
+    20586.21,
+    20586.21
+   ],
+   "wind_speed_40hPa": [
+    2.75,
+    4.53
+   ],
+   "wind_direction_40hPa": [
+    194,
+    197
+   ],
+   "geopotential_height_40hPa": [
+    21984.13,
+    21984.13
+   ],
+   "wind_speed_30hPa": [
+    4.96,
+    5.08
+   ],
+   "wind_direction_30hPa": [
+    200,
+    203
+   ],
+   "geopotential_height_30hPa": [
+    23785.05,
+    23785.05
+   ],
+   "wind_speed_20hPa": [
+    4.12,
+    6.34
+   ],
+   "wind_direction_20hPa": [
+    256,
+    273
+   ],
+   "geopotential_height_20hPa": [
+    26318.18,
+    26318.18
+   ],
+   "wind_speed_15hPa": [
+    6.75,
+    4.96
+   ],
+   "wind_direction_15hPa": [
+    303,
+    318
+   ],
+   "geopotential_height_15hPa": [
+    28114.65,
+    28114.65
+   ],
+   "wind_speed_10hPa": [
+    12.58,
+    12.98
+   ],
+   "wind_direction_10hPa": [
+    302,
+    299
+   ],
+   "geopotential_height_10hPa": [
+    30652.18,
+    30652.18
+   ]
+  }
+ },
+ {
+  "latitude": 60.976242,
+  "longitude": 23.554688,
+  "generationtime_ms": 61.25783920288086,
+  "utc_offset_seconds": 0,
+  "timezone": "GMT",
+  "timezone_abbreviation": "GMT",
+  "elevation": 107.0,
+  "location_id": 1,
+  "hourly_units": {
+   "time": "unixtime",
+   "wind_speed_10m": "m/s",
+   "wind_direction_10m": "\u00b0",
+   "wind_speed_1000hPa": "m/s",
+   "wind_direction_1000hPa": "\u00b0",
+   "geopotential_height_1000hPa": "m",
+   "wind_speed_975hPa": "m/s",
+   "wind_direction_975hPa": "\u00b0",
+   "geopotential_height_975hPa": "m",
+   "wind_speed_950hPa": "m/s",
+   "wind_direction_950hPa": "\u00b0",
+   "geopotential_height_950hPa": "m",
+   "wind_speed_925hPa": "m/s",
+   "wind_direction_925hPa": "\u00b0",
+   "geopotential_height_925hPa": "m",
+   "wind_speed_900hPa": "m/s",
+   "wind_direction_900hPa": "\u00b0",
+   "geopotential_height_900hPa": "m",
+   "wind_speed_850hPa": "m/s",
+   "wind_direction_850hPa": "\u00b0",
+   "geopotential_height_850hPa": "m",
+   "wind_speed_800hPa": "m/s",
+   "wind_direction_800hPa": "\u00b0",
+   "geopotential_height_800hPa": "m",
+   "wind_speed_750hPa": "m/s",
+   "wind_direction_750hPa": "\u00b0",
+   "geopotential_height_750hPa": "m",
+   "wind_speed_700hPa": "m/s",
+   "wind_direction_700hPa": "\u00b0",
+   "geopotential_height_700hPa": "m",
+   "wind_speed_650hPa": "m/s",
+   "wind_direction_650hPa": "\u00b0",
+   "geopotential_height_650hPa": "m",
+   "wind_speed_600hPa": "m/s",
+   "wind_direction_600hPa": "\u00b0",
+   "geopotential_height_600hPa": "m",
+   "wind_speed_550hPa": "m/s",
+   "wind_direction_550hPa": "\u00b0",
+   "geopotential_height_550hPa": "m",
+   "wind_speed_500hPa": "m/s",
+   "wind_direction_500hPa": "\u00b0",
+   "geopotential_height_500hPa": "m",
+   "wind_speed_450hPa": "m/s",
+   "wind_direction_450hPa": "\u00b0",
+   "geopotential_height_450hPa": "m",
+   "wind_speed_400hPa": "m/s",
+   "wind_direction_400hPa": "\u00b0",
+   "geopotential_height_400hPa": "m",
+   "wind_speed_350hPa": "m/s",
+   "wind_direction_350hPa": "\u00b0",
+   "geopotential_height_350hPa": "m",
+   "wind_speed_300hPa": "m/s",
+   "wind_direction_300hPa": "\u00b0",
+   "geopotential_height_300hPa": "m",
+   "wind_speed_250hPa": "m/s",
+   "wind_direction_250hPa": "\u00b0",
+   "geopotential_height_250hPa": "m",
+   "wind_speed_200hPa": "m/s",
+   "wind_direction_200hPa": "\u00b0",
+   "geopotential_height_200hPa": "m",
+   "wind_speed_150hPa": "m/s",
+   "wind_direction_150hPa": "\u00b0",
+   "geopotential_height_150hPa": "m",
+   "wind_speed_100hPa": "m/s",
+   "wind_direction_100hPa": "\u00b0",
+   "geopotential_height_100hPa": "m",
+   "wind_speed_70hPa": "m/s",
+   "wind_direction_70hPa": "\u00b0",
+   "geopotential_height_70hPa": "m",
+   "wind_speed_50hPa": "m/s",
+   "wind_direction_50hPa": "\u00b0",
+   "geopotential_height_50hPa": "m",
+   "wind_speed_40hPa": "m/s",
+   "wind_direction_40hPa": "\u00b0",
+   "geopotential_height_40hPa": "m",
+   "wind_speed_30hPa": "m/s",
+   "wind_direction_30hPa": "\u00b0",
+   "geopotential_height_30hPa": "m",
+   "wind_speed_20hPa": "m/s",
+   "wind_direction_20hPa": "\u00b0",
+   "geopotential_height_20hPa": "m",
+   "wind_speed_15hPa": "m/s",
+   "wind_direction_15hPa": "\u00b0",
+   "geopotential_height_15hPa": "m",
+   "wind_speed_10hPa": "m/s",
+   "wind_direction_10hPa": "\u00b0",
+   "geopotential_height_10hPa": "m"
+  },
+  "hourly": {
+   "time": [
+    1792753200,
+    1792756800
+   ],
+   "wind_speed_10m": [
+    4.6,
+    4.52
+   ],
+   "wind_direction_10m": [
+    124,
+    125
+   ],
+   "wind_speed_1000hPa": [
+    5.36,
+    5.06
+   ],
+   "wind_direction_1000hPa": [
+    127,
+    128
+   ],
+   "geopotential_height_1000hPa": [
+    143.0,
+    140.0
+   ],
+   "wind_speed_975hPa": [
+    10.43,
+    10.5
+   ],
+   "wind_direction_975hPa": [
+    131,
+    131
+   ],
+   "geopotential_height_975hPa": [
+    353.0,
+    350.0
+   ],
+   "wind_speed_950hPa": [
+    13.2,
+    12.97
+   ],
+   "wind_direction_950hPa": [
+    143,
+    143
+   ],
+   "geopotential_height_950hPa": [
+    567.0,
+    564.0
+   ],
+   "wind_speed_925hPa": [
+    15.23,
+    14.77
+   ],
+   "wind_direction_925hPa": [
+    161,
+    162
+   ],
+   "geopotential_height_925hPa": [
+    787.0,
+    784.0
+   ],
+   "wind_speed_900hPa": [
+    15.23,
+    14.87
+   ],
+   "wind_direction_900hPa": [
+    163,
+    164
+   ],
+   "geopotential_height_900hPa": [
+    1014.0,
+    1010.0
+   ],
+   "wind_speed_850hPa": [
+    15.11,
+    14.89
+   ],
+   "wind_direction_850hPa": [
+    164,
+    162
+   ],
+   "geopotential_height_850hPa": [
+    1483.0,
+    1479.0
+   ],
+   "wind_speed_800hPa": [
+    15.34,
+    15.4
+   ],
+   "wind_direction_800hPa": [
+    168,
+    165
+   ],
+   "geopotential_height_800hPa": [
+    1974.0,
+    1970.0
+   ],
+   "wind_speed_750hPa": [
+    15.98,
+    16.19
+   ],
+   "wind_direction_750hPa": [
+    164,
+    166
+   ],
+   "geopotential_height_750hPa": [
+    2488.0,
+    2484.0
+   ],
+   "wind_speed_700hPa": [
+    14.85,
+    14.81
+   ],
+   "wind_direction_700hPa": [
+    165,
+    168
+   ],
+   "geopotential_height_700hPa": [
+    3029.0,
+    3026.0
+   ],
+   "wind_speed_650hPa": [
+    12.94,
+    13.36
+   ],
+   "wind_direction_650hPa": [
+    166,
+    166
+   ],
+   "geopotential_height_650hPa": [
+    3611.0,
+    3607.0
+   ],
+   "wind_speed_600hPa": [
+    12.68,
+    12.9
+   ],
+   "wind_direction_600hPa": [
+    165,
+    166
+   ],
+   "geopotential_height_600hPa": [
+    4230.0,
+    4226.0
+   ],
+   "wind_speed_550hPa": [
+    12.99,
+    12.93
+   ],
+   "wind_direction_550hPa": [
+    168,
+    169
+   ],
+   "geopotential_height_550hPa": [
+    4891.0,
+    4888.0
+   ],
+   "wind_speed_500hPa": [
+    13.48,
+    13.73
+   ],
+   "wind_direction_500hPa": [
+    171,
+    174
+   ],
+   "geopotential_height_500hPa": [
+    5602.0,
+    5600.0
+   ],
+   "wind_speed_450hPa": [
+    12.74,
+    12.78
+   ],
+   "wind_direction_450hPa": [
+    174,
+    173
+   ],
+   "geopotential_height_450hPa": [
+    6371.27,
+    6369.06
+   ],
+   "wind_speed_400hPa": [
+    10.53,
+    12.29
+   ],
+   "wind_direction_400hPa": [
+    191,
+    193
+   ],
+   "geopotential_height_400hPa": [
+    7209.88,
+    7208.64
+   ],
+   "wind_speed_350hPa": [
+    11.82,
+    12.74
+   ],
+   "wind_direction_350hPa": [
+    220,
+    227
+   ],
+   "geopotential_height_350hPa": [
+    8132.87,
+    8135.66
+   ],
+   "wind_speed_300hPa": [
+    10.35,
+    8.65
+   ],
+   "wind_direction_300hPa": [
+    255,
+    254
+   ],
+   "geopotential_height_300hPa": [
+    9170.97,
+    9174.19
+   ],
+   "wind_speed_250hPa": [
+    10.63,
+    12.02
+   ],
+   "wind_direction_250hPa": [
+    229,
+    226
+   ],
+   "geopotential_height_250hPa": [
+    10358.1,
+    10360.0
+   ],
+   "wind_speed_200hPa": [
+    10.05,
+    10.69
+   ],
+   "wind_direction_200hPa": [
+    186,
+    184
+   ],
+   "geopotential_height_200hPa": [
+    11788.37,
+    11786.05
+   ],
+   "wind_speed_150hPa": [
+    12.41,
+    12.69
+   ],
+   "wind_direction_150hPa": [
+    186,
+    194
+   ],
+   "geopotential_height_150hPa": [
+    13635.82,
+    13635.82
+   ],
+   "wind_speed_100hPa": [
+    10.8,
+    12.69
+   ],
+   "wind_direction_100hPa": [
+    189,
+    194
+   ],
+   "geopotential_height_100hPa": [
+    16220.83,
+    16220.83
+   ],
+   "wind_speed_70hPa": [
+    6.32,
+    7.31
+   ],
+   "wind_direction_70hPa": [
+    198,
+    204
+   ],
+   "geopotential_height_70hPa": [
+    18469.95,
+    18475.41
+   ],
+   "wind_speed_50hPa": [
+    4.96,
+    4.35
+   ],
+   "wind_direction_50hPa": [
+    228,
+    238
+   ],
+   "geopotential_height_50hPa": [
+    20586.21,
+    20579.31
+   ],
+   "wind_speed_40hPa": [
+    3.28,
+    4.22
+   ],
+   "wind_direction_40hPa": [
+    204,
+    198
+   ],
+   "geopotential_height_40hPa": [
+    21984.13,
+    21984.13
+   ],
+   "wind_speed_30hPa": [
+    4.03,
+    4.92
+   ],
+   "wind_direction_30hPa": [
+    204,
+    208
+   ],
+   "geopotential_height_30hPa": [
+    23785.05,
+    23785.05
+   ],
+   "wind_speed_20hPa": [
+    4.45,
+    7.01
+   ],
+   "wind_direction_20hPa": [
+    257,
+    273
+   ],
+   "geopotential_height_20hPa": [
+    26318.18,
+    26318.18
+   ],
+   "wind_speed_15hPa": [
+    6.57,
+    5.21
+   ],
+   "wind_direction_15hPa": [
+    300,
+    310
+   ],
+   "geopotential_height_15hPa": [
+    28114.65,
+    28114.65
+   ],
+   "wind_speed_10hPa": [
+    13.15,
+    12.98
+   ],
+   "wind_direction_10hPa": [
+    300,
+    299
+   ],
+   "geopotential_height_10hPa": [
+    30637.68,
+    30652.18
+   ]
+  }
+ }
+]

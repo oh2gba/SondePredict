@@ -1,0 +1,5 @@
+# uncompyle6 version 3.9.3
+# Python bytecode version base 2.7 (62211)
+# Decompiled from: Python 3.13.5 (main, Aug 10 2026, 12:06:59) [GCC 14.2.0]
+# Embedded file name: sonde_predict_v3\defaults.py
+DEFAULTCONFIG = '\n################################################################################################\n# IT IS NOT RECOMMENDED TO EDIT THIS FILE !\n################################################################################################\n\n[track_settings]\nballoon_asc_rate = float(default=5)\nballoon_desc_rate = float(default=40)\nballoon_desc_gain = float(default=1)\nballoon_burst_alt = integer(default=24000)\ngrid_size = 0p50\n\n[network_settings]\nproxy_enabled = boolean(default=False)\nproxy_address = string(default=\'http://proxy.example.com:8080/\')\n[general]\ngoogle_earth = string(default="C:\\Program Files\\Google\\Google Earth\\client\\googleearth.exe")\noverwrite_predictions = boolean(default=True)\nuse_utc = boolean(default=True)\nversion_check = boolean(default=True)\n[locations]\n[manual_run]\n'
