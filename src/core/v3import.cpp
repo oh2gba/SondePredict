@@ -2,6 +2,8 @@
 
 #include <QFile>
 
+#include <algorithm>
+
 namespace sp {
 
 namespace configobj {
@@ -276,7 +278,7 @@ V3ImportResult importV3Config(const QString &path, AppSettings &settings)
             if (const auto v = toNumber(h); v && *v >= 0 && *v < 24)
                 rule.hours << static_cast<int>(*v);
         }
-        rule.intervalHours = static_cast<int>(toNumber(schedule->value(QStringLiteral("interval"))).value_or(0));
+        rule.intervalHours = std::clamp(static_cast<int>(toNumber(schedule->value(QStringLiteral("interval"))).value_or(0)), 0, 168);
 
         if (!rule.siteName.isEmpty() && !rule.days.isEmpty() && !rule.hours.isEmpty()) {
             settings.schedule = rule;

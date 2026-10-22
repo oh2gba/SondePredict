@@ -152,7 +152,16 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     out.wind.gridStep = readDouble(s, QStringLiteral("grid_step"), out.wind.gridStep);
     s.endGroup();
 
-    s.beginGroup(QStringLiteral("general"));
+    // Written as [options]. Older files used "general", which QSettings writes as [%General]
+    // (because [General] is its own section) and reads back as "General".
+    QString optionsGroup = QStringLiteral("options");
+    if (!s.childGroups().contains(optionsGroup)) {
+        for (const QString &group : s.childGroups()) {
+            if (group.compare(QLatin1String("general"), Qt::CaseInsensitive) == 0)
+                optionsGroup = group;
+        }
+    }
+    s.beginGroup(optionsGroup);
     out.general.googleEarthPath = s.value(QStringLiteral("google_earth")).toString();
     out.general.overwritePredictions = readBool(s, QStringLiteral("overwrite_predictions"), out.general.overwritePredictions);
     out.general.useUtc = readBool(s, QStringLiteral("use_utc"), out.general.useUtc);
@@ -231,7 +240,7 @@ bool AppSettings::save(const QString &path, QString *error) const
     s.setValue(QStringLiteral("grid_step"), QString::number(wind.gridStep, 'g', 10));
     s.endGroup();
 
-    s.beginGroup(QStringLiteral("general"));
+    s.beginGroup(QStringLiteral("options"));
     s.setValue(QStringLiteral("google_earth"), general.googleEarthPath);
     s.setValue(QStringLiteral("overwrite_predictions"), general.overwritePredictions);
     s.setValue(QStringLiteral("use_utc"), general.useUtc);

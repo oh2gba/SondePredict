@@ -149,6 +149,26 @@ private slots:
         QVERIFY(rule->autoRun); // kept: switched on and off in the main window
     }
 
+    void batchKeepsMissingLocation()
+    {
+        SettingsDialog dialog(sample());
+        // Remove the batch's launch site: the batch must not silently move to "Home".
+        child<QListWidget>(dialog, "locationList")->setCurrentRow(0);
+        child<QPushButton>(dialog, "locRemove")->click();
+        QCOMPARE(child<QComboBox>(dialog, "batchSite")->currentText(), QStringLiteral("Jokioinen"));
+        dialog.accept();
+        QCOMPARE(dialog.settings().schedule->siteName, QStringLiteral("Jokioinen"));
+    }
+
+    void emptyBatchIsNotStored()
+    {
+        sp::AppSettings in = sample();
+        in.schedule.reset();
+        SettingsDialog dialog(in);
+        dialog.accept();
+        QVERIFY(!dialog.settings().schedule);
+    }
+
     void manualProxyNeedsAddress()
     {
         SettingsDialog dialog(sample());

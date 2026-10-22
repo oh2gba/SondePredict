@@ -36,7 +36,8 @@ private:
     QWidget *buildBatchTab();
 
     // Batch
-    void refreshBatchLocations();
+    // Refills the batch drop-downs, selecting the given names (default: the current ones).
+    void refreshBatchLocations(std::optional<QString> site = std::nullopt, std::optional<QString> home = std::nullopt);
     std::optional<sp::ScheduleRule> scheduleFromForm() const;
     void updateBatchSummary();
 

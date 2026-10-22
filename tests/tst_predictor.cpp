@@ -81,6 +81,36 @@ private slots:
         QVERIFY(!predictor.isRunning());
     }
 
+    void landingAreaFetchFailureKeepsPrediction()
+    {
+        const auto wind = [](sp::NodeIndex, qint64, double alt) { return sp::LevelWind{alt, 20.0 + alt / 1000.0, 5.0}; };
+        sp::FlightSpread wide;
+        wide.burstAltitude = 5000.0; // varied flights reach well beyond the nominal track
+
+        // How many fetches does the prediction itself need?
+        sptest::FakeSource counting(wind);
+        sp::Predictor first(&counting, std::make_shared<sp::WindField>(0.25));
+        first.setSpread({false});
+        QSignalSpy firstDone(&first, &sp::Predictor::finished);
+        first.start(launch());
+        QVERIFY(firstDone.wait(5000));
+
+        // Same again with the landing area on, and every fetch after those failing.
+        sptest::FakeSource failing(wind);
+        failing.failAfter = counting.fetchCount;
+        sp::Predictor predictor(&failing, std::make_shared<sp::WindField>(0.25));
+        predictor.setSpread(wide);
+        QSignalSpy finished(&predictor, &sp::Predictor::finished);
+        QSignalSpy failed(&predictor, &sp::Predictor::failed);
+        predictor.start(launch());
+        QVERIFY(finished.wait(5000));
+        QCOMPARE(failed.count(), 0);
+        QVERIFY(failing.fetchCount > counting.fetchCount); // the area stage did try to fetch
+        const auto prediction = finished.first().at(0).value<sp::Prediction>();
+        QVERIFY(prediction.result.landing);
+        QVERIFY(prediction.landingArea); // estimated from the winds already loaded
+    }
+
     void cancelSuppressesResult()
     {
         sptest::FakeSource source(sptest::uniform(5.0, 0.0));

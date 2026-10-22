@@ -84,10 +84,12 @@ void Predictor::fetch(std::vector<NodeIndex> nodes, qint64 firstHour, qint64 las
     m_current.nodesFetched += static_cast<int>(needed.size());
     const int generation = m_generation;
     QPointer<Predictor> self(this);
-    m_source->fetch(needed, firstHour, lastHour, *m_field, [self, generation](const QString &error) {
+    m_source->fetch(needed, firstHour, lastHour, m_field, [self, generation](const QString &error) {
         if (!self || generation != self->m_generation)
             return;
-        if (!error.isEmpty())
+        // The landing-area fetch is optional: the prediction itself is complete by then, so
+        // finish it with the area estimated from the winds already loaded.
+        if (!error.isEmpty() && !self->m_areaStage)
             self->fail(error);
         else
             self->afterFetch();
@@ -173,13 +175,16 @@ void Predictor::estimateAreaAndFinish()
         }
     }
     m_running = false;
-    emit finished(m_current);
+    const Prediction result = m_current; // a slot may start the next prediction
+    emit finished(result);
 }
 
 void Predictor::fail(const QString &error)
 {
+    // Copy: `error` may refer to m_current, which a slot starting the next prediction overwrites.
+    const QString message = error;
     m_running = false;
-    emit failed(error);
+    emit failed(message);
 }
 
 } // namespace sp

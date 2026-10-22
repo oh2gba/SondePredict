@@ -4,6 +4,7 @@
 
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -496,10 +497,11 @@ QWidget *SettingsDialog::buildBatchTab()
     m_batchSummary = new QLabel;
     m_batchSummary->setWordWrap(true);
 
-    refreshBatchLocations();
+    if (const auto &rule = m_settings.schedule)
+        refreshBatchLocations(rule->siteName, rule->homeName);
+    else
+        refreshBatchLocations();
     if (const auto &rule = m_settings.schedule) {
-        m_batchSite->setCurrentText(rule->siteName);
-        m_batchHome->setCurrentIndex(std::max(0, m_batchHome->findText(rule->homeName)));
         for (int i = 0; i < m_batchDays->count(); ++i)
             m_batchDays->item(i)->setCheckState(rule->days.contains(i) ? Qt::Checked : Qt::Unchecked);
         for (int i = 0; i < m_batchHours->count(); ++i)
@@ -545,12 +547,12 @@ QWidget *SettingsDialog::buildBatchTab()
     return page;
 }
 
-void SettingsDialog::refreshBatchLocations()
+void SettingsDialog::refreshBatchLocations(std::optional<QString> wantedSite, std::optional<QString> wantedHome)
 {
     if (!m_batchSite)
         return;
-    const QString site = m_batchSite->currentText();
-    const QString home = m_batchHome->currentText();
+    const QString site = wantedSite.value_or(m_batchSite->currentText());
+    const QString home = wantedHome.value_or(m_batchHome->currentIndex() > 0 ? m_batchHome->currentText() : QString());
     const QSignalBlocker siteBlocker(m_batchSite);
     const QSignalBlocker homeBlocker(m_batchHome);
     m_batchSite->clear();
@@ -560,8 +562,24 @@ void SettingsDialog::refreshBatchLocations()
         m_batchSite->addItem(l.name);
         m_batchHome->addItem(l.name);
     }
-    m_batchSite->setCurrentIndex(std::max(0, m_batchSite->findText(site)));
-    m_batchHome->setCurrentIndex(std::max(0, m_batchHome->findText(home)));
+    // A name that is no longer a location stays selected, marked, so that pressing OK does not
+    // quietly move the batch to another place.
+    const auto select = [this](QComboBox *combo, const QString &name) {
+        if (name.isEmpty()) {
+            combo->setCurrentIndex(0);
+            return;
+        }
+        int i = combo->findText(name);
+        if (i < 0) {
+            combo->addItem(name);
+            i = combo->count() - 1;
+            combo->setItemData(i, QColor(Qt::red), Qt::ForegroundRole);
+            combo->setItemData(i, tr("Not one of your locations any more"), Qt::ToolTipRole);
+        }
+        combo->setCurrentIndex(i);
+    };
+    select(m_batchSite, site);
+    select(m_batchHome, home);
     updateBatchSummary();
 }
 
@@ -594,6 +612,12 @@ void SettingsDialog::updateBatchSummary()
     if (!rule) {
         m_batchSummary->setText(tr("Add a location first."));
         return;
+    }
+    for (const QString &name : {rule->siteName, rule->homeName}) {
+        if (!name.isEmpty() && !m_settings.location(name)) {
+            m_batchSummary->setText(tr("\u201c%1\u201d is no longer one of your locations; choose another one.").arg(name));
+            return;
+        }
     }
     const int count = int(rule->days.size() * rule->hours.size());
     if (count == 0) {
@@ -673,6 +697,8 @@ void SettingsDialog::accept()
     m_settings.general.googleEarthPath = m_googleEarth->text().trimmed();
     m_settings.general.overwritePredictions = m_overwrite->isChecked();
     m_settings.general.useUtc = m_useUtc->isChecked();
-    m_settings.schedule = scheduleFromForm();
+    // A batch without days or hours cannot run; don't store an empty one.
+    const auto rule = scheduleFromForm();
+    m_settings.schedule = rule && !rule->days.isEmpty() && !rule->hours.isEmpty() ? rule : std::nullopt;
     QDialog::accept();
 }

@@ -170,7 +170,7 @@ OpenMeteoClient::OpenMeteoClient(QNetworkAccessManager *network, OpenMeteoOption
 }
 
 void OpenMeteoClient::fetch(const std::vector<NodeIndex> &nodes, qint64 firstHour, qint64 lastHour,
-                            WindField &field, Done done)
+                            std::shared_ptr<WindField> field, Done done)
 {
     if (nodes.empty()) {
         done({});
@@ -184,13 +184,13 @@ void OpenMeteoClient::fetch(const std::vector<NodeIndex> &nodes, qint64 firstHou
     for (std::size_t start = 0; start < nodes.size(); start += chunkSize) {
         std::vector<NodeIndex> chunk(nodes.begin() + static_cast<std::ptrdiff_t>(start),
                                      nodes.begin() + static_cast<std::ptrdiff_t>(std::min(nodes.size(), start + chunkSize)));
-        const QUrl url = openmeteo::buildUrl(m_options, field, chunk, firstHour, lastHour);
+        const QUrl url = openmeteo::buildUrl(m_options, *field, chunk, firstHour, lastHour);
         ++batch->pending;
-        send(url, std::move(chunk), &field, batch, 0);
+        send(url, std::move(chunk), field, batch, 0);
     }
 }
 
-void OpenMeteoClient::send(const QUrl &url, std::vector<NodeIndex> chunk, WindField *field,
+void OpenMeteoClient::send(const QUrl &url, std::vector<NodeIndex> chunk, std::shared_ptr<WindField> field,
                            std::shared_ptr<Batch> batch, int attempt)
 {
     QNetworkRequest request(url);

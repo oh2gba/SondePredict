@@ -39,6 +39,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -121,8 +122,10 @@ MainWindow::MainWindow(QString configPath, QString dbPath, QWidget *parent)
 
     m_scheduleTimer.setTimerType(Qt::VeryCoarseTimer);
     connect(&m_scheduleTimer, &QTimer::timeout, this, [this]() {
-        updateScheduleTimer(); // schedules the next one
-        startBatch(true);
+        m_nextScheduledRun = QDateTime::currentDateTimeUtc().addMSecs(m_scheduleTimer.interval());
+        m_schedulerCheck->setToolTip(tr("Next batch at %1").arg(formatTime(double(m_nextScheduledRun.toSecsSinceEpoch()))));
+        m_scheduledBatchDue = true;
+        runDueScheduledBatch();
     });
     updateBatchControls();
     updateScheduleTimer();
@@ -256,7 +259,8 @@ void MainWindow::buildMenus()
     m_selectionActions << file->addAction(tr("Export selected as &KML (Google Earth)..."), this, [this]() { exportSelected(false); });
     m_selectionActions << file->addAction(tr("Export selected as &GPX (GPS, phone)..."), this, [this]() { exportSelected(true); });
     file->addSeparator();
-    file->addAction(tr("&Import Sonde Predict v3 settings..."), this, &MainWindow::importV3Settings);
+    QAction *import = file->addAction(tr("&Import Sonde Predict v3 settings..."), this, &MainWindow::importV3Settings);
+    import->setObjectName(QStringLiteral("importAction"));
     file->addSeparator();
     QAction *quit = file->addAction(tr("&Quit"), this, &QWidget::close);
     quit->setShortcut(QKeySequence::Quit);
@@ -319,6 +323,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 void MainWindow::applySettings()
 {
+    // A running prediction uses the client and wind cache replaced below; stop it cleanly.
+    if (isBusy()) {
+        stopRunning();
+        m_statusLabel->setText(tr("Stopped because the settings changed"));
+    }
     if (const QString error = sp::applyProxy(m_settings.network); !error.isEmpty())
         m_statusLabel->setText(error);
 
@@ -657,7 +666,8 @@ void MainWindow::onPredictionFailed(const QString &error)
 {
     qWarning().noquote() << "Prediction failed:" << error;
     setBusy(false, tr("Prediction failed"));
-    QMessageBox::warning(this, tr("Prediction failed"), error);
+    // Show it once the predictor has finished emitting; the box runs its own event loop.
+    QTimer::singleShot(0, this, [this, error]() { QMessageBox::warning(this, tr("Prediction failed"), error); });
 }
 
 bool MainWindow::isBusy() const
@@ -671,8 +681,10 @@ void MainWindow::setBusy(bool busy, const QString &message)
     m_progress->setVisible(busy);
     m_runButton->setText(busy ? tr("&Stop") : tr("&Start"));
     m_runButton->setEnabled(busy || m_siteCombo->count() > 0);
-    if (QAction *settings = findChild<QAction *>(QStringLiteral("settingsAction")))
-        settings->setEnabled(!busy);
+    for (const char *name : {"settingsAction", "importAction"}) {
+        if (QAction *action = findChild<QAction *>(QString::fromLatin1(name)))
+            action->setEnabled(!busy);
+    }
     updateBatchControls();
     if (!message.isEmpty())
         m_statusLabel->setText(message);
@@ -715,10 +727,28 @@ void MainWindow::updateScheduleTimer()
                                              .arg(counted(m_settings.schedule ? m_settings.schedule->intervalHours : 0, tr("%1 hour"), tr("%1 hours"))));
         return;
     }
-    const int ms = m_settings.schedule->intervalHours * 3600 * 1000;
+    const int ms = std::clamp(m_settings.schedule->intervalHours, 1, 168) * 3600 * 1000;
+    if (m_scheduleTimer.isActive() && m_scheduleTimer.interval() == ms)
+        return; // keep the current countdown
     m_scheduleTimer.start(ms);
     m_nextScheduledRun = QDateTime::currentDateTimeUtc().addMSecs(ms);
     m_schedulerCheck->setToolTip(tr("Next batch at %1").arg(formatTime(double(m_nextScheduledRun.toSecsSinceEpoch()))));
+}
+
+void MainWindow::runDueScheduledBatch()
+{
+    if (!m_scheduledBatchDue || !m_settings.schedule || !m_settings.schedule->autoRun) {
+        m_scheduledBatchDue = false;
+        return;
+    }
+    // Not while busy, or while a dialog is open (accepting Settings replaces the wind source
+    // under a running batch); try again in a minute.
+    if (isBusy() || QApplication::activeModalWidget()) {
+        QTimer::singleShot(60 * 1000, this, &MainWindow::runDueScheduledBatch);
+        return;
+    }
+    m_scheduledBatchDue = false;
+    startBatch(true);
 }
 
 void MainWindow::startBatch(bool scheduled)
@@ -759,8 +789,8 @@ void MainWindow::startBatch(bool scheduled)
         qInfo() << "Batch done:" << succeeded << "succeeded," << failed << "failed";
         refreshTree();
         if (failed && !m_batchScheduled) {
-            QMessageBox::warning(this, tr("Batch"), tr("%1 failed:").arg(predictions(failed)) + u'\n'
-                                     + m_batchErrors.mid(0, 5).join(u'\n'));
+            const QString text = tr("%1 failed:").arg(predictions(failed)) + u'\n' + m_batchErrors.mid(0, 5).join(u'\n');
+            QTimer::singleShot(0, this, [this, text]() { QMessageBox::warning(this, tr("Batch"), text); });
         }
     });
 
@@ -890,6 +920,7 @@ void MainWindow::importV3Settings()
     applySettings();
     refreshLocationCombos();
     refreshTree(selectedIds().value(0));
+    updateScheduleTimer();
     QMessageBox::information(this, tr("Import"), result.messages.join(u'\n'));
 }
 

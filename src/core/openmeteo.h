@@ -47,7 +47,7 @@ public:
                              QObject *parent = nullptr);
 
     void fetch(const std::vector<NodeIndex> &nodes, qint64 firstHour, qint64 lastHour,
-               WindField &field, Done done) override;
+               std::shared_ptr<WindField> field, Done done) override;
 
     // Total number of HTTP requests made, for diagnostics.
     int requestCount() const { return m_requestCount; }
@@ -58,7 +58,7 @@ signals:
 
 private:
     struct Batch;
-    void send(const QUrl &url, std::vector<NodeIndex> chunk, WindField *field, std::shared_ptr<Batch> batch,
+    void send(const QUrl &url, std::vector<NodeIndex> chunk, std::shared_ptr<WindField> field, std::shared_ptr<Batch> batch,
               int attempt);
 
     QNetworkAccessManager *m_network;

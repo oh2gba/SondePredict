@@ -5,6 +5,7 @@
 #include <QString>
 
 #include <functional>
+#include <memory>
 #include <vector>
 
 namespace sp {
@@ -18,9 +19,10 @@ public:
     virtual ~WindSource() = default;
 
     // Loads `nodes` for every hour in [firstHour, lastHour] (unix hours) into `field` and
-    // then calls `done`, possibly asynchronously. `field` must outlive the call.
+    // then calls `done`, possibly asynchronously. The source shares ownership of `field`
+    // until it is done, so a cancelled caller may drop its own reference at any time.
     virtual void fetch(const std::vector<NodeIndex> &nodes, qint64 firstHour, qint64 lastHour,
-                       WindField &field, Done done) = 0;
+                       std::shared_ptr<WindField> field, Done done) = 0;
 };
 
 } // namespace sp

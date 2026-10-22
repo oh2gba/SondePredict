@@ -63,6 +63,7 @@ private:
     void setBusy(bool busy, const QString &message = {});
     void updateBatchControls();
     void updateScheduleTimer();
+    void runDueScheduledBatch();
 
     std::vector<sp::PredictionRecord> selectedRecords() const;
     void openInGoogleEarth();
@@ -93,6 +94,7 @@ private:
     QStringList m_batchErrors;
     QTimer m_scheduleTimer;
     QDateTime m_nextScheduledRun;
+    bool m_scheduledBatchDue = false;
     std::shared_ptr<sp::WindField> m_field;
     QDateTime m_fieldCreated;
 

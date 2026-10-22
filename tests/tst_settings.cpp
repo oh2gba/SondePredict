@@ -87,6 +87,25 @@ private slots:
         QCOMPARE(s.schedule->hours, (QList<int>{11}));
     }
 
+    void readsOldGeneralSection()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("old.ini"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("[%General]\ngoogle_earth=/opt/ge\nuse_utc=false\n");
+        f.close();
+        const sp::AppSettings s = sp::AppSettings::load(path);
+        QCOMPARE(s.general.googleEarthPath, QStringLiteral("/opt/ge"));
+        QCOMPARE(s.general.useUtc, false);
+
+        QVERIFY(s.save(path));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray saved = f.readAll();
+        QVERIFY(saved.contains("[options]"));
+        QVERIFY(!saved.contains("%General"));
+    }
+
     void findsLocationsByNameIgnoringCase()
     {
         sp::AppSettings s;

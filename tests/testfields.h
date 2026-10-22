@@ -7,6 +7,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <climits>
 #include <cstdint>
 #include <functional>
 
@@ -49,14 +50,18 @@ public:
         : m_wind(std::move(wind)), m_ground(ground), m_lastAvailable(lastAvailableHour) {}
 
     void fetch(const std::vector<sp::NodeIndex> &nodes, qint64 firstHour, qint64 lastHour,
-               sp::WindField &field, Done done) override
+               std::shared_ptr<sp::WindField> field, Done done) override
     {
         ++fetchCount;
         nodesRequested += static_cast<int>(nodes.size());
-        QTimer::singleShot(0, [this, nodes, firstHour, lastHour, &field, done]() {
+        if (fetchCount > failAfter) {
+            QTimer::singleShot(0, [done]() { done(QStringLiteral("simulated network error")); });
+            return;
+        }
+        QTimer::singleShot(0, [this, nodes, firstHour, lastHour, field, done]() {
             for (const sp::NodeIndex &n : nodes) {
                 for (qint64 h = firstHour; h <= std::min(lastHour, m_lastAvailable); ++h)
-                    field.insert({n, h}, m_ground, profile(m_wind, n, h));
+                    field->insert({n, h}, m_ground, profile(m_wind, n, h));
             }
             done({});
         });
@@ -64,6 +69,7 @@ public:
 
     int fetchCount = 0;
     int nodesRequested = 0;
+    int failAfter = INT_MAX; // fetches after this many fail
 
 private:
     WindFunction m_wind;
