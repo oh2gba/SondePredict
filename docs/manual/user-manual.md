@@ -358,6 +358,13 @@ future or the past for the forecast.
 **The map stays grey** — map tiles come from tile.openstreetmap.org and need the same internet
 access as the wind data. Tiles you have seen are cached and work offline.
 
+**Linux: the window stays empty or grey** — the AppImage could not use your graphics driver
+through Wayland. Start it through X11 instead:
+
+```bash
+QT_QPA_PLATFORM=xcb ./SondePredict-x86_64.AppImage
+```
+
 **Google Earth does not open** — install Google Earth Pro, or set its program under
 *Settings → General*. You can always use *File → Export selected as KML* and open the file
 yourself.

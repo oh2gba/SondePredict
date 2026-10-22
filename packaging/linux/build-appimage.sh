@@ -61,10 +61,26 @@ export EXTRA_PLATFORM_PLUGINS="libqwayland.so;libqoffscreen.so" # offscreen: hea
 export PATH="$TOOLS:$PATH"
 
 cd "$BUILD"
-APPIMAGE_EXTRACT_AND_RUN=1 "$TOOLS/linuxdeploy-x86_64.AppImage" \
-    --appdir "$APPDIR" \
+LINUXDEPLOY=("$TOOLS/linuxdeploy-x86_64.AppImage" --appdir "$APPDIR")
+APPIMAGE_EXTRACT_AND_RUN=1 "${LINUXDEPLOY[@]}" \
     --desktop-file "$APPDIR/usr/share/applications/sondepredict.desktop" \
     --icon-file "$ROOT/packaging/icons/sondepredict-256.png" --icon-filename sondepredict \
-    --plugin qt \
-    --output appimage
+    --plugin qt
+
+# The Qt plugin bundles the Wayland platform plugin but not its EGL client integration;
+# without it the window cannot draw on Wayland desktops ("Failed to load client buffer
+# integration: wayland-egl"). Add it, with its libraries, before packing.
+GRAPHICS="$APPDIR/usr/plugins/wayland-graphics-integration-client"
+mkdir -p "$GRAPHICS"
+cp "$QT_PREFIX/plugins/wayland-graphics-integration-client/libqt-plugin-wayland-egl.so" "$GRAPHICS/"
+
+# Headless tests cannot notice a missing display or graphics plugin, so check for them here.
+for plugin in platforms/libqxcb.so platforms/libqwayland.so \
+              wayland-graphics-integration-client/libqt-plugin-wayland-egl.so \
+              xcbglintegrations/libqxcb-egl-integration.so geoservices/libqtgeoservices_osm.so \
+              sqldrivers/libqsqlite.so tls/libqopensslbackend.so; do
+    [ -f "$APPDIR/usr/plugins/$plugin" ] || { echo "error: $plugin is missing from the AppImage" >&2; exit 1; }
+done
+
+APPIMAGE_EXTRACT_AND_RUN=1 "${LINUXDEPLOY[@]}" --deploy-deps-only "$GRAPHICS" --output appimage
 ls -l "$BUILD"/Sonde_Predict-*.AppImage
