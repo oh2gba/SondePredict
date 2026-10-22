@@ -9,6 +9,13 @@ Status: the desktop app (`sondepredict`) and a command-line predictor (`sp-cli`)
 predictions on an OpenStreetMap view, batch runs and a scheduler, export to Google Earth (KML)
 and GPS apps (GPX), saved locations and predictions, and import of v3 settings.
 
+## User manual
+
+[docs/manual/user-manual.md](docs/manual/user-manual.md) (also built into the app: Help → User
+manual, F1) and as a PDF: [docs/manual/user-manual.pdf](docs/manual/user-manual.pdf). After
+editing the manual, regenerate the PDF with `sondepredict --manual-pdf docs/manual/user-manual.pdf`
+(add `QT_QPA_PLATFORM=offscreen` on a machine without a display).
+
 ## Packages
 
 * **Linux**: `packaging/linux/build-appimage.sh <qt-prefix>` builds a self-contained AppImage.

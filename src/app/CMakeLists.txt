@@ -1,5 +1,6 @@
 # The windows and dialogs live in a library so the tests can use them too.
 qt_add_library(sp_app STATIC
+    helpwindow.cpp helpwindow.h
     mainwindow.cpp mainwindow.h
     mapwidget.cpp mapwidget.h
     settingsdialog.cpp settingsdialog.h
@@ -17,6 +18,13 @@ qt_add_resources(sp_app "icons"
         ${PROJECT_SOURCE_DIR}/packaging/icons/sondepredict-48.png
         ${PROJECT_SOURCE_DIR}/packaging/icons/sondepredict-32.png
         ${PROJECT_SOURCE_DIR}/packaging/icons/sondepredict-16.png
+)
+# The user manual, shown by Help → User manual.
+file(GLOB SP_MANUAL_IMAGES ${PROJECT_SOURCE_DIR}/docs/manual/images/*)
+qt_add_resources(sp_app "manual"
+    PREFIX "/manual"
+    BASE ${PROJECT_SOURCE_DIR}/docs/manual
+    FILES ${PROJECT_SOURCE_DIR}/docs/manual/user-manual.md ${SP_MANUAL_IMAGES}
 )
 target_include_directories(sp_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sp_app PUBLIC

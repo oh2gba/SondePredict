@@ -1,5 +1,6 @@
 // Sonde Predict desktop application.
 
+#include "helpwindow.h"
 #include "mainwindow.h"
 #include "predictionstore.h"
 #include "settings.h"
@@ -15,6 +16,7 @@
 #include <QTextStream>
 #include <QPushButton>
 #include <QTimer>
+#include <QTreeWidget>
 
 #include <algorithm>
 
@@ -65,8 +67,16 @@ int main(int argc, char *argv[])
     parser.addOptions({
         {QStringLiteral("config"), QStringLiteral("Settings file."), QStringLiteral("file"), sp::AppSettings::defaultPath()},
         {QStringLiteral("db"), QStringLiteral("Prediction database."), QStringLiteral("file"), sp::PredictionStore::defaultPath()},
+        {QStringLiteral("manual-pdf"), QStringLiteral("Save the user manual as a PDF file and exit."), QStringLiteral("file")},
     });
     parser.process(app);
+
+    if (parser.isSet(QStringLiteral("manual-pdf"))) {
+        const QString error = HelpWindow::writePdf(parser.value(QStringLiteral("manual-pdf")));
+        if (!error.isEmpty())
+            qCritical().noquote() << error;
+        return error.isEmpty() ? 0 : 1;
+    }
 
     const QString dbPath = parser.value(QStringLiteral("db"));
     QDir().mkpath(QFileInfo(dbPath).absolutePath());
@@ -86,6 +96,17 @@ int main(int argc, char *argv[])
         QTimer::singleShot(500, &window, [&window, button]() {
             if (auto *run = window.findChild<QPushButton *>(button))
                 run->click();
+        });
+    }
+    // SP_SELECT_DAY=1 selects the first day in the prediction tree (all its predictions).
+    if (qEnvironmentVariableIsSet("SP_SELECT_DAY")) {
+        QTimer::singleShot(300, &window, [&window]() {
+            auto *tree = window.findChild<QTreeWidget *>(QStringLiteral("predictionTree"));
+            if (tree && tree->topLevelItemCount() > 0) {
+                tree->clearSelection();
+                tree->setCurrentItem(tree->topLevelItem(0));
+                tree->topLevelItem(0)->setSelected(true);
+            }
         });
     }
     if (const QString shot = qEnvironmentVariable("SP_SCREENSHOT"); !shot.isEmpty()) {

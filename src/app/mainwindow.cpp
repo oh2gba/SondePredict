@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 
+#include "helpwindow.h"
 #include "mapwidget.h"
 #include "network.h"
 #include "settingsdialog.h"
@@ -266,6 +267,17 @@ void MainWindow::buildMenus()
     settings->setObjectName(QStringLiteral("settingsAction"));
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
+    QAction *manual = help->addAction(tr("&User manual"), this, [this]() {
+        auto *window = findChild<HelpWindow *>();
+        if (!window) {
+            window = new HelpWindow(this);
+            window->setAttribute(Qt::WA_DeleteOnClose);
+        }
+        window->show();
+        window->raise();
+        window->activateWindow();
+    });
+    manual->setShortcut(QKeySequence::HelpContents);
     help->addAction(tr("Open &log file"), this, [this]() {
         const QString log = QFileInfo(m_dbPath).dir().filePath(QStringLiteral("log.txt"));
         if (!QFileInfo::exists(log) || !QDesktopServices::openUrl(QUrl::fromLocalFile(log)))
