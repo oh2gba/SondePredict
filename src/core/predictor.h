@@ -1,5 +1,6 @@
 #pragma once
 
+#include "landingarea.h"
 #include "simulator.h"
 #include "windsource.h"
 
@@ -14,6 +15,7 @@ struct Prediction {
     SimulationResult result;
     int passes = 0;       // simulate/fetch rounds needed
     int nodesFetched = 0; // grid nodes downloaded for this prediction
+    std::optional<LandingArea> landingArea;
 };
 
 // Runs a prediction: fetches the wind data the flight needs, re-flying the track until
@@ -31,6 +33,9 @@ public:
     void cancel();
     bool isRunning() const { return m_running; }
 
+    // Variation used to estimate the landing area after each prediction (disable to skip).
+    void setSpread(const FlightSpread &spread) { m_spread = spread; }
+
     static constexpr int kMaxPasses = 8;
 
 signals:
@@ -40,7 +45,9 @@ signals:
 
 private:
     void fetch(std::vector<NodeIndex> nodes, qint64 firstHour, qint64 lastHour);
+    void afterFetch();
     void pass();
+    void estimateAreaAndFinish();
     void fail(const QString &error);
 
     WindSource *m_source;
@@ -51,6 +58,8 @@ private:
     qint64 m_lastHour = 0;
     int m_generation = 0;
     bool m_running = false;
+    bool m_areaStage = false; // fetching extra winds for the landing area
+    FlightSpread m_spread;
 };
 
 } // namespace sp

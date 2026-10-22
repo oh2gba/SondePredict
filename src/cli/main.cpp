@@ -146,6 +146,11 @@ void printPrediction(const sp::Prediction &prediction, const std::optional<sp::G
         out() << "From your location: " << QString::number(fromHome.distance / 1000.0, 'f', 1)
               << " km, bearing " << qRound(fromHome.initialBearing) << "°\n";
     }
+    if (const auto &area = prediction.landingArea) {
+        out() << "Landing area (95%): " << QString::number(area->majorAxis() / 1000.0, 'f', 1) << " x "
+              << QString::number(area->minorAxis() / 1000.0, 'f', 1) << " km, long axis " << qRound(area->majorBearing)
+              << "°, from " << area->samples << " varied flights\n";
+    }
     out() << "Wind data: " << prediction.nodesFetched << " grid points fetched, " << requests
           << " requests, " << prediction.passes << " passes\n";
     if (r.aboveTopLevel)
@@ -254,6 +259,7 @@ int main(int argc, char *argv[])
         {QStringLiteral("gpx"), QStringLiteral("Write the prediction(s) as GPX for GPS and phone apps."), QStringLiteral("file")},
         {QStringLiteral("save"), QStringLiteral("Store the prediction(s) in the prediction database.")},
         {QStringLiteral("batch"), QStringLiteral("Run the batch set up in the settings (days × launch hours).")},
+        {QStringLiteral("no-area"), QStringLiteral("Skip the landing-area estimate.")},
         {QStringLiteral("export"), QStringLiteral("Export stored predictions (ids from --list) with --kml / --gpx and exit."), QStringLiteral("ids")},
         {QStringLiteral("list"), QStringLiteral("List stored predictions and exit.")},
         {QStringLiteral("locations"), QStringLiteral("List saved locations and exit.")},
@@ -338,6 +344,9 @@ int main(int argc, char *argv[])
     QNetworkAccessManager network;
     sp::OpenMeteoClient client(&network, options);
     auto field = std::make_shared<sp::WindField>(grid);
+    sp::FlightSpread spread = settings.spread;
+    if (parser.isSet(QStringLiteral("no-area")))
+        spread.enabled = false;
     QObject::connect(&client, &sp::OpenMeteoClient::rateLimited, [](int seconds) {
         QTextStream(stderr) << "Open-Meteo rate limit reached, retrying in " << seconds << " s..." << Qt::endl;
     });
@@ -362,6 +371,7 @@ int main(int argc, char *argv[])
             die(QStringLiteral("all batch launches are beyond the forecast range"));
 
         auto *runner = new sp::BatchRunner(&client, field, &app);
+        runner->setSpread(spread);
         auto records = std::make_shared<std::vector<sp::PredictionRecord>>();
         QObject::connect(runner, &sp::BatchRunner::jobStarted, [](int index, int total, const sp::BatchJob &job) {
             QTextStream(stderr) << "Batch " << index + 1 << '/' << total << ": " << job.siteName << ' '
@@ -421,6 +431,7 @@ int main(int argc, char *argv[])
     params.launchTime = launch.toSecsSinceEpoch();
 
     sp::Predictor predictor(&client, field);
+    predictor.setSpread(spread);
     QObject::connect(&predictor, &sp::Predictor::progress, [](const QString &message) {
         QTextStream(stderr) << message << "..." << Qt::endl;
     });

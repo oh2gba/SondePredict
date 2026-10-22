@@ -62,6 +62,18 @@ Item {
         }
 
         MapItemView {
+            model: trackModel.areas
+            delegate: MapPolygon {
+                required property var modelData
+                path: modelData.path
+                // Amber, so the area stands apart from the red descent line.
+                color: modelData.current ? "#55ffb300" : "#30ffb300"
+                border.color: "#ff8f00"
+                border.width: modelData.current ? 2 : 1
+            }
+        }
+
+        MapItemView {
             model: trackModel.lines
             delegate: MapPolyline {
                 required property var modelData

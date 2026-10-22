@@ -47,6 +47,13 @@ const char *const kMigrations[] = {
     "  u REAL NOT NULL, v REAL NOT NULL, phase INTEGER NOT NULL,"
     "  PRIMARY KEY (prediction_id, seq)"
     ") WITHOUT ROWID;",
+    // 1 → 2: landing area (phase 5)
+    "ALTER TABLE predictions ADD COLUMN area_lat REAL;"
+    "ALTER TABLE predictions ADD COLUMN area_lon REAL;"
+    "ALTER TABLE predictions ADD COLUMN area_major_sigma REAL;"
+    "ALTER TABLE predictions ADD COLUMN area_minor_sigma REAL;"
+    "ALTER TABLE predictions ADD COLUMN area_bearing REAL;"
+    "ALTER TABLE predictions ADD COLUMN area_samples INTEGER;",
 };
 
 constexpr int kMigrationCount = static_cast<int>(std::size(kMigrations));
@@ -198,8 +205,9 @@ qint64 PredictionStore::save(const PredictionRecord &record, bool replaceExistin
         " home_name, home_lat, home_lon, manual, model, ascent_rate, burst_altitude, descent_model,"
         " descent_rate, descent_exponent, legacy_descent_rate, legacy_descent_gain, time_step, output_interval,"
         " burst_time, burst_lat, burst_lon, burst_alt, landing_time, landing_lat, landing_lon, landing_alt,"
-        " distance_from_home, bearing_from_home, above_top_level, passes, nodes_fetched)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        " distance_from_home, bearing_from_home, above_top_level, passes, nodes_fetched,"
+        " area_lat, area_lon, area_major_sigma, area_minor_sigma, area_bearing, area_samples)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(record.createdAt ? record.createdAt : QDateTime::currentSecsSinceEpoch());
     q.addBindValue(p.launchTime);
     q.addBindValue(record.siteName);
@@ -233,6 +241,13 @@ qint64 PredictionStore::save(const PredictionRecord &record, bool replaceExistin
     q.addBindValue(r.aboveTopLevel ? 1 : 0);
     q.addBindValue(record.prediction.passes);
     q.addBindValue(record.prediction.nodesFetched);
+    const std::optional<LandingArea> &area = record.prediction.landingArea;
+    q.addBindValue(optionalValue(area ? std::optional(area->centre.lat) : std::nullopt));
+    q.addBindValue(optionalValue(area ? std::optional(area->centre.lon) : std::nullopt));
+    q.addBindValue(optionalValue(area ? std::optional(area->majorSigma) : std::nullopt));
+    q.addBindValue(optionalValue(area ? std::optional(area->minorSigma) : std::nullopt));
+    q.addBindValue(optionalValue(area ? std::optional(area->majorBearing) : std::nullopt));
+    q.addBindValue(area ? QVariant(area->samples) : QVariant(QMetaType(QMetaType::Int)));
     if (!q.exec()) {
         m_error = q.lastError().text();
         db.rollback();
@@ -303,7 +318,8 @@ std::optional<PredictionRecord> PredictionStore::load(qint64 id) const
         "SELECT created_at, launch_time, site_name, site_lat, site_lon, site_alt, home_name, home_lat, home_lon,"
         " manual, model, ascent_rate, burst_altitude, descent_model, descent_rate, descent_exponent,"
         " legacy_descent_rate, legacy_descent_gain, time_step, output_interval, above_top_level, passes,"
-        " nodes_fetched, burst_time FROM predictions WHERE id = ?"));
+        " nodes_fetched, burst_time, area_lat, area_lon, area_major_sigma, area_minor_sigma, area_bearing,"
+        " area_samples FROM predictions WHERE id = ?"));
     q.addBindValue(id);
     if (!q.exec() || !q.next()) {
         m_error = q.lastError().isValid() ? q.lastError().text() : QStringLiteral("no prediction %1").arg(id);
@@ -337,6 +353,15 @@ std::optional<PredictionRecord> PredictionStore::load(qint64 id) const
     rec.prediction.passes = q.value(21).toInt();
     rec.prediction.nodesFetched = q.value(22).toInt();
     const std::optional<double> burstTime = optionalDouble(q.value(23));
+    if (!q.value(24).isNull()) {
+        LandingArea area;
+        area.centre = {q.value(24).toDouble(), q.value(25).toDouble()};
+        area.majorSigma = q.value(26).toDouble();
+        area.minorSigma = q.value(27).toDouble();
+        area.majorBearing = q.value(28).toDouble();
+        area.samples = q.value(29).toInt();
+        rec.prediction.landingArea = area;
+    }
 
     QSqlQuery t(db);
     t.prepare(QStringLiteral("SELECT time, lat, lon, alt, u, v, phase FROM track_points WHERE prediction_id = ? ORDER BY seq"));

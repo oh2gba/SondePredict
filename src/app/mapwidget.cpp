@@ -48,6 +48,7 @@ void TrackMapModel::setPredictions(const std::vector<sp::PredictionRecord> &reco
 {
     m_lines.clear();
     m_markers.clear();
+    m_areas.clear();
     QGeoRectangle bounds;
 
     // Draw the current (first) prediction last so it ends up on top.
@@ -74,6 +75,14 @@ void TrackMapModel::setPredictions(const std::vector<sp::PredictionRecord> &reco
         m_lines << QVariantMap{{QStringLiteral("path"), descent}, {QStringLiteral("color"), QStringLiteral("#e53935")},
                                {QStringLiteral("current"), current}};
 
+        if (const auto &area = rec.prediction.landingArea) {
+            QVariantList outline;
+            for (const sp::GeoPoint &p : area->outline(0.95)) {
+                outline << QVariant::fromValue(coordinate(p));
+                bounds.extendRectangle(coordinate(p));
+            }
+            m_areas << QVariantMap{{QStringLiteral("path"), outline}, {QStringLiteral("current"), current}};
+        }
         m_markers << marker(QStringLiteral("launch"), r.track.front().position, current ? rec.siteName : QString(), current);
         if (r.burst)
             m_markers << marker(QStringLiteral("burst"), r.burst->position, current ? tr("Burst %1").arg(hhmm(r.burst->time)) : QString(), current);
@@ -81,7 +90,9 @@ void TrackMapModel::setPredictions(const std::vector<sp::PredictionRecord> &reco
             m_markers << marker(QStringLiteral("landing"), r.landing->position, hhmm(r.landing->time), current);
         if (rec.home) {
             m_markers << marker(QStringLiteral("home"), *rec.home, current ? rec.homeName : QString(), current);
-            bounds.extendRectangle(coordinate(*rec.home));
+            // Zoom out to include your location only when it is near enough to matter.
+            if (r.landing && sp::inverse(*rec.home, r.landing->position).distance < 300000.0)
+                bounds.extendRectangle(coordinate(*rec.home));
         }
     }
 
@@ -94,6 +105,7 @@ void TrackMapModel::setLocations(const sp::Location *site, const sp::Location *h
 {
     m_lines.clear();
     m_markers.clear();
+    m_areas.clear();
     QGeoRectangle bounds;
     for (const auto &[location, kind] : {std::pair{site, QStringLiteral("site")}, std::pair{home, QStringLiteral("home")}}) {
         if (!location)

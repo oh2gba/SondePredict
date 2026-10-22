@@ -63,7 +63,7 @@ public:
     // <user data dir>/SondePredict/predictions.sqlite
     static QString defaultPath();
 
-    static constexpr int kSchemaVersion = 1;
+    static constexpr int kSchemaVersion = 2;
 
 private:
     bool migrate();

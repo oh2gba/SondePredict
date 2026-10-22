@@ -41,6 +41,7 @@ public:
     void start(std::vector<BatchJob> jobs);
     void cancel();
     bool isRunning() const { return m_running; }
+    void setSpread(const FlightSpread &spread) { m_predictor.setSpread(spread); }
 
 signals:
     void jobStarted(int index, int total, const sp::BatchJob &job);

@@ -2,6 +2,7 @@
 
 #include "flightprofile.h"
 #include "geo.h"
+#include "landingarea.h"
 
 #include <QList>
 #include <QString>
@@ -59,6 +60,7 @@ struct ManualRunSettings {
 struct AppSettings {
     QList<Location> locations;
     FlightProfile profile;
+    FlightSpread spread; // landing-area estimate
     NetworkSettings network;
     WindSettings wind;
     GeneralSettings general;

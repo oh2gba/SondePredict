@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QSaveFile>
+#include <QStringList>
 #include <QTimeZone>
 #include <QXmlStreamWriter>
 
@@ -166,6 +167,7 @@ QByteArray toKml(const std::vector<PredictionRecord> &records)
     kmlStyle(x, QStringLiteral("burst"), {}, QStringLiteral("ff006cef"), dot);
     kmlStyle(x, QStringLiteral("landing"), {}, QStringLiteral("ff2828c6"), pin);
     kmlStyle(x, QStringLiteral("home"), {}, QStringLiteral("ffc06515"), pin);
+    kmlStyle(x, QStringLiteral("area"), QStringLiteral("ff008fff"), {}, {}); // amber outline, translucent fill
 
     x.writeStartElement(QStringLiteral("Schema"));
     x.writeAttribute(QStringLiteral("id"), QStringLiteral("trackData"));
@@ -210,6 +212,27 @@ QByteArray toKml(const std::vector<PredictionRecord> &records)
                  r.landing->position, r.landing->altitude, landingDescription(rec), r.landing->time);
         if (rec.home)
             kmlPoint(x, rec.homeName, QStringLiteral("home"), *rec.home, 0.0, {});
+        if (const auto &area = rec.prediction.landingArea) {
+            x.writeStartElement(QStringLiteral("Placemark"));
+            x.writeTextElement(QStringLiteral("name"), QStringLiteral("Landing area (95%)"));
+            x.writeTextElement(QStringLiteral("description"),
+                               QStringLiteral("%1 x %2 km from %3 varied flights")
+                                   .arg(number(area->majorAxis() / 1000.0, 1), number(area->minorAxis() / 1000.0, 1))
+                                   .arg(area->samples));
+            x.writeTextElement(QStringLiteral("styleUrl"), QStringLiteral("#area"));
+            x.writeStartElement(QStringLiteral("Polygon"));
+            x.writeTextElement(QStringLiteral("tessellate"), QStringLiteral("1"));
+            x.writeStartElement(QStringLiteral("outerBoundaryIs"));
+            x.writeStartElement(QStringLiteral("LinearRing"));
+            QStringList coords;
+            for (const GeoPoint &p : area->outline(0.95))
+                coords << QStringLiteral("%1,%2,0").arg(number(p.lon, 6), number(p.lat, 6));
+            x.writeTextElement(QStringLiteral("coordinates"), coords.join(u' '));
+            x.writeEndElement(); // LinearRing
+            x.writeEndElement(); // outerBoundaryIs
+            x.writeEndElement(); // Polygon
+            x.writeEndElement(); // Placemark
+        }
         x.writeEndElement(); // Folder
     }
 

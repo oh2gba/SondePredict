@@ -20,8 +20,9 @@ void Predictor::start(const LaunchParams &params, qint64 alsoCoverUntil)
 {
     ++m_generation;
     m_running = true;
-    m_current = Prediction{params, {}, 0, 0};
+    m_current = Prediction{params, {}, 0, 0, std::nullopt};
     m_requested.clear();
+    m_areaStage = false;
 
     if (const char *error = params.profile.validationError(); *error) {
         const int generation = m_generation;
@@ -75,7 +76,7 @@ void Predictor::fetch(std::vector<NodeIndex> nodes, qint64 firstHour, qint64 las
         const int generation = m_generation;
         QMetaObject::invokeMethod(this, [this, generation]() {
             if (generation == m_generation)
-                pass();
+                afterFetch();
         }, Qt::QueuedConnection);
         return;
     }
@@ -89,8 +90,16 @@ void Predictor::fetch(std::vector<NodeIndex> nodes, qint64 firstHour, qint64 las
         if (!error.isEmpty())
             self->fail(error);
         else
-            self->pass();
+            self->afterFetch();
     });
+}
+
+void Predictor::afterFetch()
+{
+    if (m_areaStage)
+        estimateAreaAndFinish();
+    else
+        pass();
 }
 
 void Predictor::pass()
@@ -106,8 +115,7 @@ void Predictor::pass()
             fail(result.error);
             return;
         }
-        m_running = false;
-        emit finished(m_current);
+        estimateAreaAndFinish();
         return;
     }
 
@@ -136,6 +144,36 @@ void Predictor::pass()
 
     emit progress(tr("Fetching winds along the track (%1 grid points)").arg(nodes.size()));
     fetch({nodes.begin(), nodes.end()}, m_firstHour, m_lastHour);
+}
+
+void Predictor::estimateAreaAndFinish()
+{
+    if (m_spread.enabled) {
+        emit progress(tr("Estimating the landing area"));
+        const LandingAreaResult area = estimateLandingArea(m_current.params, *m_field, m_spread);
+        m_current.landingArea = area.area;
+
+        // Varied flights can reach grid points the nominal one did not; fetch those once.
+        std::set<NodeIndex> nodes;
+        qint64 first = m_firstHour, last = m_lastHour;
+        for (const NodeKey &key : area.missing) {
+            if (m_requested.contains(key))
+                continue;
+            nodes.insert(key.node);
+            first = std::min(first, key.hour);
+            last = std::max(last, key.hour);
+        }
+        if (!m_areaStage && !nodes.empty()) {
+            m_areaStage = true;
+            m_firstHour = first;
+            m_lastHour = last;
+            emit progress(tr("Fetching winds for the landing area (%1 grid points)").arg(nodes.size()));
+            fetch({nodes.begin(), nodes.end()}, first, last);
+            return;
+        }
+    }
+    m_running = false;
+    emit finished(m_current);
 }
 
 void Predictor::fail(const QString &error)

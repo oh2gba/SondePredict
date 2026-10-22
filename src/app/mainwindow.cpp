@@ -47,6 +47,18 @@ constexpr qint64 kCacheMaxAgeSecs = 3600; // GFS updates every 6 h; don't reuse 
 constexpr int kMaxDaysAhead = 15;
 constexpr int kMaxDaysBack = 7;
 
+// "1 prediction" / "3 predictions". The app ships no translation files, so tr()'s %n
+// plurals would show a literal "(s)".
+QString counted(int n, const QString &one, const QString &many)
+{
+    return (n == 1 ? one : many).arg(n);
+}
+
+QString predictions(int n)
+{
+    return counted(n, QObject::tr("%1 prediction"), QObject::tr("%1 predictions"));
+}
+
 QString compass(double bearing)
 {
     static const char *const names[] = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -507,6 +519,13 @@ void MainWindow::showDetails(const sp::PredictionRecord &rec)
         row(tr("From %1").arg(rec.homeName.toHtmlEscaped()),
             tr("<b>%1</b>, bearing %2° (%3)").arg(km(g.distance)).arg(qRound(g.initialBearing)).arg(compass(g.initialBearing)));
     }
+    if (const auto &area = rec.prediction.landingArea) {
+        const double axis = area->majorBearing;
+        row(tr("Landing area (95%)"),
+            tr("%1 × %2 km, long axis %3°–%4° (%5–%6)")
+                .arg(area->majorAxis() / 1000.0, 0, 'f', 1).arg(area->minorAxis() / 1000.0, 0, 'f', 1)
+                .arg(qRound(axis)).arg(qRound(axis + 180.0)).arg(compass(axis), compass(axis + 180.0)));
+    }
     const sp::Geodesic fromSite = sp::inverse(start.position, land.position);
     row(tr("From launch site"), tr("%1, bearing %2° (%3)").arg(km(fromSite.distance)).arg(qRound(fromSite.initialBearing)).arg(compass(fromSite.initialBearing)));
 
@@ -528,6 +547,11 @@ void MainWindow::showDetails(const sp::PredictionRecord &rec)
     row(tr("Calculated"), formatTime(double(rec.createdAt)) + (rec.manual ? QString() : tr(" (batch)")));
     html += QStringLiteral("</table>");
 
+    if (rec.prediction.landingArea) {
+        html += tr("<p style=\"color:palette(mid)\"><small>The landing area comes from %1 flights with varied ascent rate, "
+                   "burst altitude and descent speed; errors in the wind forecast make the real area larger.</small></p>")
+                    .arg(rec.prediction.landingArea->samples);
+    }
     if (r.aboveTopLevel)
         html += tr("<p><i>The flight went above the highest forecast level (10 hPa, about 31 km); the wind there was held constant.</i></p>");
     html += tr("<p style=\"color:palette(mid)\"><small>Weather data by <a href=\"https://open-meteo.com/\">Open-Meteo.com</a> (CC BY 4.0).</small></p>");
@@ -583,6 +607,7 @@ void MainWindow::runPrediction()
     windField();
     if (!m_predictor) {
         m_predictor = std::make_unique<sp::Predictor>(m_client.get(), m_field);
+        m_predictor->setSpread(m_settings.spread);
         connect(m_predictor.get(), &sp::Predictor::progress, this, [this](const QString &message) { m_statusLabel->setText(message + u'…'); });
         connect(m_predictor.get(), &sp::Predictor::finished, this, &MainWindow::onPredictionFinished);
         connect(m_predictor.get(), &sp::Predictor::failed, this, &MainWindow::onPredictionFailed);
@@ -674,8 +699,8 @@ void MainWindow::updateScheduleTimer()
         m_scheduleTimer.stop();
         m_nextScheduledRun = {};
         if (m_schedulerCheck->isEnabled())
-            m_schedulerCheck->setToolTip(tr("Repeat the batch every %n hour(s) while Sonde Predict is open", nullptr,
-                                            m_settings.schedule ? m_settings.schedule->intervalHours : 0));
+            m_schedulerCheck->setToolTip(tr("Repeat the batch every %1 while Sonde Predict is open")
+                                             .arg(counted(m_settings.schedule ? m_settings.schedule->intervalHours : 0, tr("%1 hour"), tr("%1 hours"))));
         return;
     }
     const int ms = m_settings.schedule->intervalHours * 3600 * 1000;
@@ -703,6 +728,7 @@ void MainWindow::startBatch(bool scheduled)
     }
 
     m_batch = std::make_unique<sp::BatchRunner>(m_client.get(), windField());
+    m_batch->setSpread(m_settings.spread);
     m_batchScheduled = scheduled;
     m_batchSaved = 0;
     m_batchErrors.clear();
@@ -716,18 +742,18 @@ void MainWindow::startBatch(bool scheduled)
         qWarning().noquote() << "Batch prediction failed:" << m_batchErrors.last();
     });
     connect(m_batch.get(), &sp::BatchRunner::finished, this, [this](int succeeded, int failed) {
-        setBusy(false, tr("Batch done: %n prediction(s) saved", nullptr, m_batchSaved)
-                           + (failed ? tr(", %n failed", nullptr, failed) : QString()));
+        setBusy(false, tr("Batch done: %1 saved").arg(predictions(m_batchSaved))
+                           + (failed ? tr(", %1 failed").arg(failed) : QString()));
         qInfo() << "Batch done:" << succeeded << "succeeded," << failed << "failed";
         refreshTree();
         if (failed && !m_batchScheduled) {
-            QMessageBox::warning(this, tr("Batch"), tr("%n prediction(s) failed:", nullptr, failed) + u'\n'
+            QMessageBox::warning(this, tr("Batch"), tr("%1 failed:").arg(predictions(failed)) + u'\n'
                                      + m_batchErrors.mid(0, 5).join(u'\n'));
         }
     });
 
     qInfo() << "Batch started:" << plan.jobs.size() << "predictions" << (scheduled ? "(scheduled)" : "");
-    setBusy(true, tr("Starting a batch of %n prediction(s)…", nullptr, int(plan.jobs.size())));
+    setBusy(true, tr("Starting a batch of %1…").arg(predictions(int(plan.jobs.size()))));
     m_batch->start(plan.jobs);
 }
 
@@ -781,7 +807,7 @@ void MainWindow::openInGoogleEarth()
                                  tr("No program opened the KML file. Install Google Earth Pro, or set its path in "
                                     "Settings → General.\n\nThe file was saved as %1").arg(QDir::toNativeSeparators(path)));
     } else {
-        m_statusLabel->setText(tr("Opened %n prediction(s) in Google Earth", nullptr, int(records.size())));
+        m_statusLabel->setText(tr("Opened %1 in Google Earth").arg(predictions(int(records.size()))));
     }
 }
 
@@ -811,7 +837,7 @@ void MainWindow::deleteSelected()
     const QList<qint64> ids = selectedIds();
     if (ids.isEmpty())
         return;
-    if (QMessageBox::question(this, tr("Delete predictions"), tr("Delete %n prediction(s)?", nullptr, int(ids.size())))
+    if (QMessageBox::question(this, tr("Delete predictions"), tr("Delete %1?").arg(predictions(int(ids.size()))))
         != QMessageBox::Yes) {
         return;
     }

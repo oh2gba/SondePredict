@@ -132,6 +132,14 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     p.legacyDescentGain = readDouble(s, QStringLiteral("legacy_descent_gain"), p.legacyDescentGain);
     s.endGroup();
 
+    s.beginGroup(QStringLiteral("landing_area"));
+    out.spread.enabled = readBool(s, QStringLiteral("enabled"), out.spread.enabled);
+    out.spread.ascentRate = readDouble(s, QStringLiteral("ascent_sigma"), out.spread.ascentRate);
+    out.spread.burstAltitude = readDouble(s, QStringLiteral("burst_sigma"), out.spread.burstAltitude);
+    out.spread.descentRate = readDouble(s, QStringLiteral("descent_sigma"), out.spread.descentRate);
+    out.spread.samples = s.value(QStringLiteral("samples"), out.spread.samples).toInt();
+    s.endGroup();
+
     s.beginGroup(QStringLiteral("network"));
     out.network.proxyMode = proxyModeFromName(s.value(QStringLiteral("proxy_mode")).toString());
     out.network.proxyUrl = s.value(QStringLiteral("proxy_url")).toString();
@@ -201,6 +209,14 @@ bool AppSettings::save(const QString &path, QString *error) const
     s.setValue(QStringLiteral("descent_exponent"), QString::number(profile.descentExponent, 'g', 10));
     s.setValue(QStringLiteral("legacy_descent_rate"), QString::number(profile.legacyDescentRate, 'g', 10));
     s.setValue(QStringLiteral("legacy_descent_gain"), QString::number(profile.legacyDescentGain, 'g', 10));
+    s.endGroup();
+
+    s.beginGroup(QStringLiteral("landing_area"));
+    s.setValue(QStringLiteral("enabled"), spread.enabled);
+    s.setValue(QStringLiteral("ascent_sigma"), QString::number(spread.ascentRate, 'g', 10));
+    s.setValue(QStringLiteral("burst_sigma"), QString::number(spread.burstAltitude, 'g', 10));
+    s.setValue(QStringLiteral("descent_sigma"), QString::number(spread.descentRate, 'g', 10));
+    s.setValue(QStringLiteral("samples"), spread.samples);
     s.endGroup();
 
     s.beginGroup(QStringLiteral("network"));

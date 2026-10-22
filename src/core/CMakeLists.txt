@@ -3,6 +3,7 @@ qt_add_library(sp_core STATIC
     batch.cpp batch.h
     flightprofile.cpp flightprofile.h
     geo.cpp geo.h
+    landingarea.cpp landingarea.h
     network.cpp network.h
     openmeteo.cpp openmeteo.h
     predictionstore.cpp predictionstore.h

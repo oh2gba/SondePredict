@@ -72,6 +72,10 @@ private:
     QDoubleSpinBox *m_descentExponent = nullptr;
     QDoubleSpinBox *m_legacyRate = nullptr;
     QDoubleSpinBox *m_legacyGain = nullptr;
+    QCheckBox *m_areaEnabled = nullptr;
+    QDoubleSpinBox *m_areaAscent = nullptr;
+    QSpinBox *m_areaBurst = nullptr;
+    QSpinBox *m_areaDescent = nullptr;
     QLabel *m_profilePreview = nullptr;
 
     QLineEdit *m_apiUrl = nullptr;

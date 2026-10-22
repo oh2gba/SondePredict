@@ -154,10 +154,29 @@ Done:
   The Windows build has not been run yet (no Windows machine here, no GitHub remote).
 * 14 test suites pass.
 
-### Phase 5 — optional extras
-* Uncertainty: GFS ensemble (GEFS via Open-Meteo ensemble API) → landing-area ellipse.
+### Phase 5 — optional extras (landing area ✅)
+* ~~Uncertainty: GFS ensemble (GEFS via Open-Meteo ensemble API) → landing-area ellipse.~~
+  Done differently, see below.
 * Wind above 10 hPa for very high bursts.
 * Dark mode, units (km/mi), simple update check against GitHub releases.
+
+Done: **landing area**. The GFS ensemble would cost roughly half of the free daily Open-Meteo
+quota per prediction (31 members × 86 variables per grid point), so instead `landingarea` re-flies
+each prediction 50 times through the already downloaded winds with the balloon varied
+(1σ: ascent ±0.4 m/s, burst ±1500 m, descent ±10 %; adjustable in Settings → Balloon) and fits
+a 2-D normal distribution to the landings. The 95 % ellipse is drawn on the map (amber), listed
+in the details ("17.0 × 0.6 km, long axis 162°–342°"), exported to KML and printed by `sp-cli`
+(`--no-area` skips it). Burst altitude, the biggest single source of landing scatter, is
+covered; forecast wind errors are not, which the app says next to the figure. Any extra grid
+points the varied flights need are fetched once. Results are deterministic (fixed seed) and
+stored with the prediction (database schema 2; version-1 databases are upgraded on open).
+A run of 50 varied flights takes about 0.3 s in a debug build.
+
+Also: the map only zooms out to include "your location" when it is within 300 km of the landing.
+
+Not done (judged not worth it now): wind above 10 hPa (Open-Meteo has no GFS data above it;
+the top wind is held and flagged), km/mi units, an update check (no public repository yet).
+Dark mode follows the system palette already, except for the map tiles.
 
 ## Building
 

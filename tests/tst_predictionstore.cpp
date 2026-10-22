@@ -24,6 +24,7 @@ sp::PredictionRecord makeRecord(qint64 launchTime, const QString &site = QString
     rec.prediction.params.siteAltitude = 104.0;
     rec.prediction.params.launchTime = launchTime;
     rec.prediction.result = sp::simulate(rec.prediction.params, field);
+    rec.prediction.landingArea = sp::LandingArea{{61.0, 24.0}, 4000.0, 1200.0, 80.0, 40, {}};
     rec.prediction.passes = 2;
     rec.prediction.nodesFetched = 20;
     return rec;
@@ -82,6 +83,11 @@ private slots:
         QCOMPARE(b.burst->time, a.burst->time);
         QCOMPARE(b.burst->altitude, a.burst->altitude);
         QCOMPARE(b.landing->position.lon, a.landing->position.lon);
+
+        QVERIFY(b.track.size() > 0);
+        QVERIFY(loaded->prediction.landingArea);
+        QCOMPARE(loaded->prediction.landingArea->majorSigma, original.prediction.landingArea->majorSigma);
+        QCOMPARE(loaded->prediction.landingArea->samples, 40);
 
         const auto summaries = store.list();
         QCOMPARE(summaries.size(), std::size_t(1));
@@ -153,6 +159,49 @@ private slots:
         rec.prediction.result.landing.reset();
         QCOMPARE(store.save(rec, true), qint64(0));
         QVERIFY(!store.lastError().isEmpty());
+    }
+
+    void upgradesVersion1Database()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("v1.sqlite"));
+        {
+            // A phase-2 database: version 1 schema with one prediction and no landing area.
+            QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("v1"));
+            db.setDatabaseName(path);
+            QVERIFY(db.open());
+            QSqlQuery q(db);
+            QVERIFY(q.exec(QStringLiteral("CREATE TABLE predictions (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at INTEGER NOT NULL,"
+                                          " launch_time INTEGER NOT NULL, site_name TEXT NOT NULL, site_lat REAL NOT NULL, site_lon REAL NOT NULL,"
+                                          " site_alt REAL, home_name TEXT NOT NULL DEFAULT '', home_lat REAL, home_lon REAL, manual INTEGER NOT NULL,"
+                                          " model TEXT NOT NULL DEFAULT '', ascent_rate REAL NOT NULL, burst_altitude REAL NOT NULL,"
+                                          " descent_model TEXT NOT NULL, descent_rate REAL NOT NULL, descent_exponent REAL NOT NULL,"
+                                          " legacy_descent_rate REAL NOT NULL, legacy_descent_gain REAL NOT NULL, time_step REAL NOT NULL,"
+                                          " output_interval REAL NOT NULL, burst_time REAL, burst_lat REAL, burst_lon REAL, burst_alt REAL,"
+                                          " landing_time REAL NOT NULL, landing_lat REAL NOT NULL, landing_lon REAL NOT NULL, landing_alt REAL NOT NULL,"
+                                          " distance_from_home REAL, bearing_from_home REAL, above_top_level INTEGER NOT NULL, passes INTEGER NOT NULL,"
+                                          " nodes_fetched INTEGER NOT NULL)")));
+            QVERIFY(q.exec(QStringLiteral("CREATE TABLE track_points (prediction_id INTEGER NOT NULL REFERENCES predictions(id) ON DELETE CASCADE,"
+                                          " seq INTEGER NOT NULL, time REAL NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL, alt REAL NOT NULL,"
+                                          " u REAL NOT NULL, v REAL NOT NULL, phase INTEGER NOT NULL, PRIMARY KEY (prediction_id, seq)) WITHOUT ROWID")));
+            QVERIFY(q.exec(QStringLiteral("INSERT INTO predictions VALUES (1, 1, %1, 'Jokioinen', 60.8, 23.5, 104, '', NULL, NULL, 1, 'gfs_global',"
+                                          " 5.5, 28000, 'density', 12, 0.24, 40, 1, 1, 10, NULL, NULL, NULL, NULL, %2, 61.2, 23.7, 100, NULL, NULL, 0, 2, 20)")
+                               .arg(kLaunch).arg(kLaunch + 6000)));
+            QVERIFY(q.exec(QStringLiteral("INSERT INTO track_points VALUES (1, 0, %1, 60.8, 23.5, 104, 0, 0, 0), (1, 1, %2, 61.2, 23.7, 100, 0, 0, 1)")
+                               .arg(kLaunch).arg(kLaunch + 6000)));
+            QVERIFY(q.exec(QStringLiteral("PRAGMA user_version = 1")));
+            db.close();
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("v1"));
+
+        sp::PredictionStore store;
+        QVERIFY2(store.open(path), qPrintable(store.lastError()));
+        QCOMPARE(store.schemaVersion(), 2);
+        const auto old = store.load(1);
+        QVERIFY2(old, qPrintable(store.lastError()));
+        QVERIFY(!old->prediction.landingArea);
+        QCOMPARE(old->siteName, QStringLiteral("Jokioinen"));
+        QVERIFY(store.save(makeRecord(kLaunch), false) > 0); // new rows get the area
     }
 
     void refusesNewerSchema()

@@ -51,6 +51,13 @@ QString minutes(double seconds)
     return m >= 60 ? QObject::tr("%1 h %2 min").arg(m / 60).arg(m % 60) : QObject::tr("%1 min").arg(m);
 }
 
+// "1 prediction" / "3 predictions". The app ships no translation files, so tr()'s %n
+// plurals would show a literal "(s)".
+QString counted(int n, const QString &one, const QString &many)
+{
+    return (n == 1 ? one : many).arg(n);
+}
+
 QLabel *note(const QString &text)
 {
     auto *label = new QLabel(text);
@@ -67,7 +74,7 @@ SettingsDialog::SettingsDialog(const sp::AppSettings &settings, QWidget *parent)
     , m_settings(settings)
 {
     setWindowTitle(tr("Settings"));
-    resize(640, 480);
+    resize(660, 560);
 
     auto *tabs = new QTabWidget;
     tabs->setObjectName(QStringLiteral("tabs"));
@@ -308,6 +315,36 @@ QWidget *SettingsDialog::buildBalloonTab()
     auto *layout = new QVBoxLayout(page);
     layout->addLayout(top);
     layout->addWidget(descent);
+
+    // Landing area: how much real flights vary from the settings above.
+    m_areaEnabled = new QCheckBox(tr("Estimate the landing area"));
+    m_areaEnabled->setObjectName(QStringLiteral("areaEnabled"));
+    m_areaEnabled->setChecked(m_settings.spread.enabled);
+    m_areaAscent = doubleSpin(0.0, 3.0, 1, 0.1, tr(" m/s"));
+    m_areaAscent->setValue(m_settings.spread.ascentRate);
+    m_areaBurst = intSpin(0, 8000, 100, tr(" m"));
+    m_areaBurst->setValue(qRound(m_settings.spread.burstAltitude));
+    m_areaDescent = intSpin(0, 50, 1, tr(" %"));
+    m_areaDescent->setValue(qRound(m_settings.spread.descentRate * 100.0));
+    auto *spreadRow = new QHBoxLayout;
+    for (const auto &[label, spin] : {std::pair<QString, QWidget *>{tr("ascent ±"), m_areaAscent},
+                                      std::pair<QString, QWidget *>{tr("burst ±"), m_areaBurst},
+                                      std::pair<QString, QWidget *>{tr("descent ±"), m_areaDescent}}) {
+        spreadRow->addWidget(new QLabel(label));
+        spreadRow->addWidget(spin);
+    }
+    spreadRow->addStretch();
+    auto *spreadBox = new QWidget;
+    spreadBox->setLayout(spreadRow);
+    spreadBox->setEnabled(m_areaEnabled->isChecked());
+    connect(m_areaEnabled, &QCheckBox::toggled, spreadBox, &QWidget::setEnabled);
+    auto *area = new QGroupBox(tr("Landing area"));
+    auto *areaLayout = new QVBoxLayout(area);
+    areaLayout->addWidget(m_areaEnabled);
+    areaLayout->addWidget(spreadBox);
+    areaLayout->addWidget(note(tr("Re-flies each prediction with this much variation (one standard deviation) and "
+                                  "shows where 95% of those flights land. Uses no extra wind data quota.")));
+    layout->addWidget(area);
     layout->addStretch();
     layout->addLayout(bottom);
 
@@ -566,10 +603,10 @@ void SettingsDialog::updateBatchSummary()
     QStringList times;
     for (int h : rule->hours)
         times << QStringLiteral("%1:%2").arg(h, 2, 10, QChar(u'0')).arg(rule->minute, 2, 10, QChar(u'0'));
-    QString text = tr("%n prediction(s) per batch from %1, launches at %2 UTC.", nullptr, count)
-                       .arg(rule->siteName, times.join(QStringLiteral(", ")));
+    QString text = tr("%1 per batch from %2, launches at %3 UTC.")
+                       .arg(counted(count, tr("%1 prediction"), tr("%1 predictions")), rule->siteName, times.join(QStringLiteral(", ")));
     if (rule->intervalHours > 0)
-        text += u' ' + tr("Repeats every %n hour(s) when scheduled runs are on.", nullptr, rule->intervalHours);
+        text += u' ' + tr("Repeats every %1 when scheduled runs are on.").arg(counted(rule->intervalHours, tr("%1 hour"), tr("%1 hours")));
     m_batchSummary->setText(text);
 }
 
@@ -623,6 +660,10 @@ void SettingsDialog::accept()
     }
 
     m_settings.profile = profile;
+    m_settings.spread.enabled = m_areaEnabled->isChecked();
+    m_settings.spread.ascentRate = m_areaAscent->value();
+    m_settings.spread.burstAltitude = m_areaBurst->value();
+    m_settings.spread.descentRate = m_areaDescent->value() / 100.0;
     m_settings.wind.apiUrl = m_apiUrl->text().trimmed();
     m_settings.wind.apiKey = m_apiKey->text().trimmed();
     m_settings.wind.model = m_model->currentText().trimmed().isEmpty() ? QStringLiteral("gfs_global") : m_model->currentText().trimmed();

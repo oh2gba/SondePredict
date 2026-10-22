@@ -15,6 +15,7 @@ class TrackMapModel : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList lines READ lines NOTIFY changed)
     Q_PROPERTY(QVariantList markers READ markers NOTIFY changed)
+    Q_PROPERTY(QVariantList areas READ areas NOTIFY changed)
     Q_PROPERTY(QString userAgent READ userAgent CONSTANT)
     Q_PROPERTY(QString cacheDirectory READ cacheDirectory CONSTANT)
 public:
@@ -22,6 +23,7 @@ public:
 
     QVariantList lines() const { return m_lines; }
     QVariantList markers() const { return m_markers; }
+    QVariantList areas() const { return m_areas; }
     QString userAgent() const;
     QString cacheDirectory() const;
 
@@ -37,6 +39,7 @@ signals:
 private:
     QVariantList m_lines;
     QVariantList m_markers;
+    QVariantList m_areas; // 95 % landing ellipses
 };
 
 class MapWidget : public QQuickWidget {
