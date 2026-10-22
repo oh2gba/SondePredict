@@ -1,16 +1,18 @@
 // sp-cli: command-line front end to the Sonde Predict core.
 
+#include "network.h"
 #include "openmeteo.h"
+#include "predictionstore.h"
 #include "predictor.h"
+#include "settings.h"
 #include "trackerlog.h"
+#include "v3import.h"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
 #include <QNetworkAccessManager>
-#include <QNetworkProxy>
-#include <QNetworkProxyFactory>
 #include <QTextStream>
 #include <QTimeZone>
 
@@ -67,6 +69,27 @@ bool parseLocation(const QString &text, sp::GeoPoint *point, std::optional<doubl
     return true;
 }
 
+struct ResolvedLocation {
+    QString name; // empty for plain coordinates
+    sp::GeoPoint point;
+    std::optional<double> altitude;
+};
+
+// A saved location's name, or "lat,lon[,alt]".
+ResolvedLocation resolveLocation(const QString &text, const sp::AppSettings &settings, const char *option)
+{
+    ResolvedLocation r;
+    if (const sp::Location *l = settings.location(text.trimmed())) {
+        r.name = l->name;
+        r.point = l->position;
+        r.altitude = l->altitude;
+        return r;
+    }
+    if (!parseLocation(text, &r.point, &r.altitude))
+        die(QStringLiteral("--%1: \"%2\" is neither a saved location nor lat,lon[,alt]").arg(QLatin1String(option), text));
+    return r;
+}
+
 double number(const QCommandLineParser &parser, const QString &name)
 {
     bool ok;
@@ -74,23 +97,6 @@ double number(const QCommandLineParser &parser, const QString &name)
     if (!ok)
         die(QStringLiteral("--%1 needs a number").arg(name));
     return value;
-}
-
-// Uses https_proxy / http_proxy / all_proxy (with credentials) when set, otherwise the
-// operating system's proxy settings. The desktop app will get a proxy setting like v3 had.
-void applyProxy()
-{
-    for (const char *name : {"https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "http_proxy", "HTTP_PROXY"}) {
-        const QUrl url(qEnvironmentVariable(name));
-        if (!url.isValid() || url.host().isEmpty())
-            continue;
-        const bool socks = url.scheme().startsWith(QStringLiteral("socks"));
-        QNetworkProxy proxy(socks ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy, url.host(),
-                            static_cast<quint16>(url.port(socks ? 1080 : 8080)), url.userName(), url.password());
-        QNetworkProxy::setApplicationProxy(proxy);
-        return;
-    }
-    QNetworkProxyFactory::setUseSystemConfiguration(true);
 }
 
 bool writeCsv(const QString &path, const sp::SimulationResult &result)
@@ -111,43 +117,174 @@ bool writeCsv(const QString &path, const sp::SimulationResult &result)
 
 } // namespace
 
+
+namespace {
+
+void printPrediction(const sp::Prediction &prediction, const std::optional<sp::GeoPoint> &home, int requests)
+{
+    const sp::SimulationResult &r = prediction.result;
+    const sp::TrackPoint &start = r.track.front();
+    const sp::TrackPoint &land = *r.landing;
+
+    out() << "Launch   " << position(start.position) << "  " << qRound(start.altitude) << " m  "
+          << utc(start.time, "yyyy-MM-dd HH:mm") << " UTC\n";
+    if (r.burst) {
+        out() << "Burst    " << position(r.burst->position) << "  " << qRound(r.burst->altitude) << " m  "
+              << utc(r.burst->time) << " UTC  (+" << duration(r.burst->time - start.time) << ")\n";
+    }
+    out() << "Landing  " << position(land.position) << "  " << qRound(land.altitude) << " m  "
+          << utc(land.time) << " UTC  (+" << duration(land.time - start.time) << ")\n";
+
+    const sp::Geodesic fromLaunch = sp::inverse(start.position, land.position);
+    out() << "From launch site: " << QString::number(fromLaunch.distance / 1000.0, 'f', 1) << " km, bearing "
+          << qRound(fromLaunch.initialBearing) << "°\n";
+    if (home) {
+        const sp::Geodesic fromHome = sp::inverse(*home, land.position);
+        out() << "From your location: " << QString::number(fromHome.distance / 1000.0, 'f', 1)
+              << " km, bearing " << qRound(fromHome.initialBearing) << "°\n";
+    }
+    out() << "Wind data: " << prediction.nodesFetched << " grid points fetched, " << requests
+          << " requests, " << prediction.passes << " passes\n";
+    if (r.aboveTopLevel)
+        out() << "Note: the flight went above the highest wind level (10 hPa); the top wind was held constant.\n";
+}
+
+void printComparison(const sp::SimulationResult &r, const QString &logPath)
+{
+    const sp::TrackerLog log = sp::readTrackerCsv(logPath);
+    if (!log.error.isEmpty())
+        die(log.error);
+    const auto c = sp::compare(r, log);
+    if (!c) {
+        out() << "Comparison: the log has no descent, or the prediction never reaches its last altitude.\n";
+        return;
+    }
+    out() << "Compared at " << qRound(c->reference.altitude) << " m on the way down (last logged point):\n"
+          << "  position error " << QString::number(c->horizontalError / 1000.0, 'f', 1) << " km, time error "
+          << QString::number(c->timeError / 60.0, 'f', 1) << " min\n";
+    if (c->burstDistance) {
+        out() << "  burst: " << QString::number(*c->burstDistance / 1000.0, 'f', 1)
+              << " km from the highest logged point, altitude " << (*c->burstAltitudeError >= 0 ? "+" : "")
+              << qRound(*c->burstAltitudeError) << " m\n";
+    }
+}
+
+int listLocations(const sp::AppSettings &settings)
+{
+    if (settings.locations.isEmpty())
+        out() << "No saved locations. Import them from v3 with --import-v3 config.ini.\n";
+    for (const sp::Location &l : settings.locations) {
+        out() << qSetFieldWidth(24) << Qt::left << l.name << qSetFieldWidth(0) << position(l.position) << "  "
+              << qRound(l.altitude) << " m  (highlight within " << l.warningDistanceKm << " km)\n";
+    }
+    return 0;
+}
+
+int listPredictions(const QString &dbPath)
+{
+    sp::PredictionStore store;
+    if (!store.open(dbPath))
+        die(store.lastError());
+    const auto predictions = store.list();
+    if (predictions.empty())
+        out() << "No saved predictions in " << dbPath << ".\n";
+    for (const sp::PredictionSummary &p : predictions) {
+        out() << qSetFieldWidth(6) << Qt::right << p.id << qSetFieldWidth(0) << "  " << utc(double(p.launchTime), "yyyy-MM-dd HH:mm")
+              << "  " << p.siteName << " → " << position(p.landing);
+        if (p.distanceFromHome)
+            out() << "  " << QString::number(*p.distanceFromHome / 1000.0, 'f', 1) << " km from " << p.homeName;
+        out() << (p.manual ? "" : "  [batch]") << '\n';
+    }
+    return 0;
+}
+
+int importV3(const QString &v3Path, const QString &configPath)
+{
+    QString error;
+    sp::AppSettings settings = sp::AppSettings::load(configPath, &error);
+    if (!error.isEmpty())
+        die(error);
+    const sp::V3ImportResult result = sp::importV3Config(v3Path, settings);
+    if (!result.error.isEmpty())
+        die(result.error);
+    if (!settings.save(configPath, &error))
+        die(error);
+    for (const QString &message : result.messages)
+        out() << message << '\n';
+    out() << "Settings saved to " << configPath << '\n';
+    return 0;
+}
+
+} // namespace
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("sp-cli"));
     QCoreApplication::setApplicationVersion(QStringLiteral(SP_VERSION));
 
-    const sp::FlightProfile defaults;
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Predict a radiosonde flight path and landing point using GFS winds."));
+    parser.setApplicationDescription(QStringLiteral(
+        "Predict a radiosonde flight path and landing point using GFS winds.\n"
+        "Balloon, wind and network settings come from the settings file unless given here."));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOptions({
-        {QStringLiteral("launch"), QStringLiteral("Launch site as lat,lon[,alt]. Altitude defaults to the ground elevation."), QStringLiteral("lat,lon[,alt]")},
+        {QStringLiteral("launch"), QStringLiteral("Launch site: a saved location name or lat,lon[,alt]. Without altitude the ground elevation is used. Defaults to the last manual-run site."), QStringLiteral("site")},
+        {QStringLiteral("home"), QStringLiteral("Your location: a saved location name or lat,lon. Defaults to the last manual-run location."), QStringLiteral("location")},
         {QStringLiteral("time"), QStringLiteral("Launch time in UTC, e.g. 2026-10-23T11:15."), QStringLiteral("utc")},
-        {QStringLiteral("ascent"), QStringLiteral("Ascent rate, m/s (default %1).").arg(defaults.ascentRate), QStringLiteral("m/s")},
-        {QStringLiteral("burst"), QStringLiteral("Burst altitude, m (default %1).").arg(defaults.burstAltitude), QStringLiteral("m")},
-        {QStringLiteral("descent"), QStringLiteral("Descent rate at sea level, m/s (default %1).").arg(defaults.seaLevelDescentRate), QStringLiteral("m/s")},
-        {QStringLiteral("exponent"), QStringLiteral("Descent density exponent k (default %1).").arg(defaults.descentExponent), QStringLiteral("k")},
+        {QStringLiteral("ascent"), QStringLiteral("Ascent rate, m/s."), QStringLiteral("m/s")},
+        {QStringLiteral("burst"), QStringLiteral("Burst altitude, m."), QStringLiteral("m")},
+        {QStringLiteral("descent"), QStringLiteral("Descent rate at sea level, m/s (density model)."), QStringLiteral("m/s")},
+        {QStringLiteral("exponent"), QStringLiteral("Descent density exponent k (density model)."), QStringLiteral("k")},
         {QStringLiteral("legacy"), QStringLiteral("Use the Sonde Predict v3 descent model: rate + altitude·gain/1000.")},
-        {QStringLiteral("legacy-rate"), QStringLiteral("v3 descent rate, m/s (default %1).").arg(defaults.legacyDescentRate), QStringLiteral("m/s")},
-        {QStringLiteral("legacy-gain"), QStringLiteral("v3 descent gain (default %1).").arg(defaults.legacyDescentGain), QStringLiteral("gain")},
-        {QStringLiteral("home"), QStringLiteral("Your location, to report distance and bearing to the landing point."), QStringLiteral("lat,lon")},
-        {QStringLiteral("grid"), QStringLiteral("Wind grid spacing in degrees (default 0.25)."), QStringLiteral("deg"), QStringLiteral("0.25")},
-        {QStringLiteral("model"), QStringLiteral("Open-Meteo model (default gfs_global)."), QStringLiteral("name"), QStringLiteral("gfs_global")},
+        {QStringLiteral("density"), QStringLiteral("Use the density-scaled descent model.")},
+        {QStringLiteral("legacy-rate"), QStringLiteral("v3 descent rate, m/s."), QStringLiteral("m/s")},
+        {QStringLiteral("legacy-gain"), QStringLiteral("v3 descent gain."), QStringLiteral("gain")},
+        {QStringLiteral("grid"), QStringLiteral("Wind grid spacing in degrees."), QStringLiteral("deg")},
+        {QStringLiteral("model"), QStringLiteral("Open-Meteo model, e.g. gfs_global."), QStringLiteral("name")},
         {QStringLiteral("api-url"), QStringLiteral("Open-Meteo endpoint, e.g. a subscription or self-hosted server."), QStringLiteral("url")},
         {QStringLiteral("api-key"), QStringLiteral("Open-Meteo API key (subscription)."), QStringLiteral("key")},
         {QStringLiteral("csv"), QStringLiteral("Write the predicted track to a CSV file."), QStringLiteral("file")},
         {QStringLiteral("compare"), QStringLiteral("Compare with a received flight (RS41Tracker CSV)."), QStringLiteral("file")},
+        {QStringLiteral("save"), QStringLiteral("Store the prediction in the prediction database.")},
+        {QStringLiteral("list"), QStringLiteral("List stored predictions and exit.")},
+        {QStringLiteral("locations"), QStringLiteral("List saved locations and exit.")},
+        {QStringLiteral("import-v3"), QStringLiteral("Import a Sonde Predict v3 config.ini into the settings and exit."), QStringLiteral("config.ini")},
+        {QStringLiteral("config"), QStringLiteral("Settings file (default %1).").arg(sp::AppSettings::defaultPath()), QStringLiteral("file")},
+        {QStringLiteral("db"), QStringLiteral("Prediction database (default %1).").arg(sp::PredictionStore::defaultPath()), QStringLiteral("file")},
     });
     parser.process(app);
 
-    if (!parser.isSet(QStringLiteral("launch")) || !parser.isSet(QStringLiteral("time")))
+    const QString configPath = parser.isSet(QStringLiteral("config")) ? parser.value(QStringLiteral("config")) : sp::AppSettings::defaultPath();
+    const QString dbPath = parser.isSet(QStringLiteral("db")) ? parser.value(QStringLiteral("db")) : sp::PredictionStore::defaultPath();
+
+    if (parser.isSet(QStringLiteral("import-v3")))
+        return importV3(parser.value(QStringLiteral("import-v3")), configPath);
+    if (parser.isSet(QStringLiteral("list")))
+        return listPredictions(dbPath);
+
+    QString settingsError;
+    const sp::AppSettings settings = sp::AppSettings::load(configPath, &settingsError);
+    if (!settingsError.isEmpty())
+        die(settingsError);
+    if (parser.isSet(QStringLiteral("locations")))
+        return listLocations(settings);
+
+    // Launch site and your location: options, else the last manual run from the settings.
+    const QString siteText = parser.isSet(QStringLiteral("launch")) ? parser.value(QStringLiteral("launch")) : settings.manualRun.siteName;
+    if (siteText.isEmpty() || !parser.isSet(QStringLiteral("time")))
         die(QStringLiteral("--launch and --time are required (see --help)"));
+    const ResolvedLocation site = resolveLocation(siteText, settings, "launch");
+
+    std::optional<ResolvedLocation> home;
+    const QString homeText = parser.isSet(QStringLiteral("home")) ? parser.value(QStringLiteral("home")) : settings.manualRun.homeName;
+    if (!homeText.isEmpty())
+        home = resolveLocation(homeText, settings, "home");
 
     sp::LaunchParams params;
-    if (!parseLocation(parser.value(QStringLiteral("launch")), &params.site, &params.siteAltitude))
-        die(QStringLiteral("--launch must be lat,lon or lat,lon,alt"));
+    params.site = site.point;
+    params.siteAltitude = site.altitude;
 
     QDateTime launch = QDateTime::fromString(parser.value(QStringLiteral("time")), Qt::ISODate);
     if (!launch.isValid())
@@ -157,34 +294,37 @@ int main(int argc, char *argv[])
     params.launchTime = launch.toSecsSinceEpoch();
 
     sp::FlightProfile &profile = params.profile;
+    profile = settings.profile;
     if (parser.isSet(QStringLiteral("ascent"))) profile.ascentRate = number(parser, QStringLiteral("ascent"));
     if (parser.isSet(QStringLiteral("burst"))) profile.burstAltitude = number(parser, QStringLiteral("burst"));
     if (parser.isSet(QStringLiteral("descent"))) profile.seaLevelDescentRate = number(parser, QStringLiteral("descent"));
     if (parser.isSet(QStringLiteral("exponent"))) profile.descentExponent = number(parser, QStringLiteral("exponent"));
     if (parser.isSet(QStringLiteral("legacy"))) profile.descentModel = sp::DescentModel::Legacy;
+    if (parser.isSet(QStringLiteral("density"))) profile.descentModel = sp::DescentModel::DensityScaled;
     if (parser.isSet(QStringLiteral("legacy-rate"))) profile.legacyDescentRate = number(parser, QStringLiteral("legacy-rate"));
     if (parser.isSet(QStringLiteral("legacy-gain"))) profile.legacyDescentGain = number(parser, QStringLiteral("legacy-gain"));
     if (const char *error = profile.validationError(); *error)
         die(QString::fromUtf8(error));
 
-    std::optional<sp::GeoPoint> home;
-    if (parser.isSet(QStringLiteral("home"))) {
-        sp::GeoPoint p;
-        if (!parseLocation(parser.value(QStringLiteral("home")), &p, nullptr))
-            die(QStringLiteral("--home must be lat,lon"));
-        home = p;
-    }
-
-    const double grid = number(parser, QStringLiteral("grid"));
+    const double grid = parser.isSet(QStringLiteral("grid")) ? number(parser, QStringLiteral("grid")) : settings.wind.gridStep;
     if (grid < 0.1 || grid > 2.0)
         die(QStringLiteral("--grid must be between 0.1 and 2 degrees"));
 
     sp::OpenMeteoOptions options;
-    options.model = parser.value(QStringLiteral("model"));
+    options.model = parser.isSet(QStringLiteral("model")) ? parser.value(QStringLiteral("model")) : settings.wind.model;
+    if (!settings.wind.apiUrl.isEmpty()) options.baseUrl = settings.wind.apiUrl;
+    options.apiKey = settings.wind.apiKey;
     if (parser.isSet(QStringLiteral("api-url"))) options.baseUrl = parser.value(QStringLiteral("api-url"));
     if (parser.isSet(QStringLiteral("api-key"))) options.apiKey = parser.value(QStringLiteral("api-key"));
 
-    applyProxy();
+    if (const QString proxyError = sp::applyProxy(settings.network); !proxyError.isEmpty())
+        QTextStream(stderr) << "sp-cli: " << proxyError << Qt::endl;
+
+    // Open the database before spending API quota on a prediction that cannot be saved.
+    sp::PredictionStore store;
+    if (parser.isSet(QStringLiteral("save")) && !store.open(dbPath))
+        die(store.lastError());
+
     QNetworkAccessManager network;
     sp::OpenMeteoClient client(&network, options);
     sp::Predictor predictor(&client, std::make_shared<sp::WindField>(grid));
@@ -197,55 +337,30 @@ int main(int argc, char *argv[])
     });
     QObject::connect(&predictor, &sp::Predictor::failed, [](const QString &error) { die(error); });
     QObject::connect(&predictor, &sp::Predictor::finished, &app, [&](const sp::Prediction &prediction) {
-        const sp::SimulationResult &r = prediction.result;
-        const sp::TrackPoint &start = r.track.front();
-        const sp::TrackPoint &land = *r.landing;
-
-        out() << "Launch   " << position(start.position) << "  " << qRound(start.altitude) << " m  "
-              << utc(start.time, "yyyy-MM-dd HH:mm") << " UTC\n";
-        if (r.burst) {
-            out() << "Burst    " << position(r.burst->position) << "  " << qRound(r.burst->altitude) << " m  "
-                  << utc(r.burst->time) << " UTC  (+" << duration(r.burst->time - start.time) << ")\n";
-        }
-        out() << "Landing  " << position(land.position) << "  " << qRound(land.altitude) << " m  "
-              << utc(land.time) << " UTC  (+" << duration(land.time - start.time) << ")\n";
-
-        const sp::Geodesic fromLaunch = sp::inverse(start.position, land.position);
-        out() << "From launch site: " << QString::number(fromLaunch.distance / 1000.0, 'f', 1) << " km, bearing "
-              << qRound(fromLaunch.initialBearing) << "°\n";
-        if (home) {
-            const sp::Geodesic fromHome = sp::inverse(*home, land.position);
-            out() << "From your location: " << QString::number(fromHome.distance / 1000.0, 'f', 1)
-                  << " km, bearing " << qRound(fromHome.initialBearing) << "°\n";
-        }
-        out() << "Wind data: " << prediction.nodesFetched << " grid points fetched, " << client.requestCount()
-              << " requests, " << prediction.passes << " passes\n";
-        if (r.aboveTopLevel)
-            out() << "Note: the flight went above the highest wind level (10 hPa); the top wind was held constant.\n";
+        printPrediction(prediction, home ? std::optional(home->point) : std::nullopt, client.requestCount());
 
         if (parser.isSet(QStringLiteral("csv"))) {
             const QString path = parser.value(QStringLiteral("csv"));
-            if (!writeCsv(path, r))
+            if (!writeCsv(path, prediction.result))
                 die(QStringLiteral("cannot write %1").arg(path));
             out() << "Track written to " << path << '\n';
         }
+        if (parser.isSet(QStringLiteral("compare")))
+            printComparison(prediction.result, parser.value(QStringLiteral("compare")));
 
-        if (parser.isSet(QStringLiteral("compare"))) {
-            const sp::TrackerLog log = sp::readTrackerCsv(parser.value(QStringLiteral("compare")));
-            if (!log.error.isEmpty())
-                die(log.error);
-            const auto c = sp::compare(r, log);
-            if (!c) {
-                out() << "Comparison: the log has no descent, or the prediction never reaches its last altitude.\n";
-            } else {
-                out() << "Compared at " << qRound(c->reference.altitude) << " m on the way down (last logged point):\n"
-                      << "  position error " << QString::number(c->horizontalError / 1000.0, 'f', 1) << " km, time error "
-                      << QString::number(c->timeError / 60.0, 'f', 1) << " min\n";
-                if (c->burstDistance) {
-                    out() << "  burst: " << QString::number(*c->burstDistance / 1000.0, 'f', 1) << " km from the highest logged point, altitude "
-                          << (*c->burstAltitudeError >= 0 ? "+" : "") << qRound(*c->burstAltitudeError) << " m\n";
-                }
+        if (parser.isSet(QStringLiteral("save"))) {
+            sp::PredictionRecord record;
+            record.siteName = site.name.isEmpty() ? position(site.point) : site.name;
+            if (home) {
+                record.homeName = home->name.isEmpty() ? position(home->point) : home->name;
+                record.home = home->point;
             }
+            record.model = options.model;
+            record.prediction = prediction;
+            const qint64 id = store.save(record, settings.general.overwritePredictions);
+            if (!id)
+                die(QStringLiteral("could not save the prediction: %1").arg(store.lastError()));
+            out() << "Saved as prediction " << id << " in " << dbPath << '\n';
         }
         out().flush();
         QCoreApplication::quit();

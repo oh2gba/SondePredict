@@ -1,6 +1,6 @@
 function(sp_add_test name)
     qt_add_executable(${name} ${name}.cpp)
-    target_link_libraries(${name} PRIVATE sp_core Qt6::Test)
+    target_link_libraries(${name} PRIVATE sp_core Qt6::Test Qt6::Sql)
     target_compile_definitions(${name} PRIVATE
         SP_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
         SP_RECOVERED_DATA="${PROJECT_SOURCE_DIR}/recovered/test_data")
@@ -15,3 +15,6 @@ sp_add_test(tst_openmeteo)
 sp_add_test(tst_simulator)
 sp_add_test(tst_predictor)
 sp_add_test(tst_trackerlog)
+sp_add_test(tst_settings)
+sp_add_test(tst_v3import)
+sp_add_test(tst_predictionstore)

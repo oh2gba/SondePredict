@@ -2,13 +2,17 @@ qt_add_library(sp_core STATIC
     atmosphere.cpp atmosphere.h
     flightprofile.cpp flightprofile.h
     geo.cpp geo.h
+    network.cpp network.h
     openmeteo.cpp openmeteo.h
+    predictionstore.cpp predictionstore.h
     predictor.cpp predictor.h
+    settings.cpp settings.h
     simulator.cpp simulator.h
     trackerlog.cpp trackerlog.h
+    v3import.cpp v3import.h
     windfield.cpp windfield.h
     windsource.h
 )
 
 target_include_directories(sp_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(sp_core PUBLIC Qt6::Core Qt6::Network)
+target_link_libraries(sp_core PUBLIC Qt6::Core Qt6::Network Qt6::Sql)

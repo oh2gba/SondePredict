@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(SP_BUILD_TESTS "Build the unit tests" ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Sql)
 qt_standard_project_setup()
 
 if(MSVC)

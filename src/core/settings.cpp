@@ -1,0 +1,246 @@
+#include "settings.h"
+
+#include <QDir>
+#include <QFileInfo>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QStringList>
+
+namespace sp {
+
+namespace {
+
+constexpr int kFormatVersion = 1;
+
+QString joinInts(const QList<int> &values)
+{
+    QStringList parts;
+    for (int v : values)
+        parts << QString::number(v);
+    return parts.join(u',');
+}
+
+// Accepts "0,1,2" whether QSettings hands it back as a string or (unquoted) a list.
+QList<int> splitInts(const QVariant &value)
+{
+    const QString text = value.typeId() == QMetaType::QStringList ? value.toStringList().join(u',') : value.toString();
+    QList<int> values;
+    for (const QString &part : text.split(u',', Qt::SkipEmptyParts)) {
+        bool ok;
+        const int v = part.trimmed().toInt(&ok);
+        if (ok)
+            values << v;
+    }
+    return values;
+}
+
+QString descentModelName(DescentModel model)
+{
+    return model == DescentModel::Legacy ? QStringLiteral("legacy") : QStringLiteral("density");
+}
+
+QString proxyModeName(ProxyMode mode)
+{
+    switch (mode) {
+    case ProxyMode::None: return QStringLiteral("none");
+    case ProxyMode::Manual: return QStringLiteral("manual");
+    case ProxyMode::System: break;
+    }
+    return QStringLiteral("system");
+}
+
+ProxyMode proxyModeFromName(const QString &name)
+{
+    if (name == QLatin1String("none"))
+        return ProxyMode::None;
+    if (name == QLatin1String("manual"))
+        return ProxyMode::Manual;
+    return ProxyMode::System;
+}
+
+double readDouble(const QSettings &s, const QString &key, double fallback)
+{
+    bool ok;
+    const double v = s.value(key).toString().toDouble(&ok);
+    return ok ? v : fallback;
+}
+
+bool readBool(const QSettings &s, const QString &key, bool fallback)
+{
+    const QVariant v = s.value(key);
+    return v.isValid() ? v.toBool() : fallback;
+}
+
+} // namespace
+
+const Location *AppSettings::location(const QString &name) const
+{
+    for (const Location &l : locations) {
+        if (l.name.compare(name, Qt::CaseInsensitive) == 0)
+            return &l;
+    }
+    return nullptr;
+}
+
+Location *AppSettings::location(const QString &name)
+{
+    return const_cast<Location *>(std::as_const(*this).location(name));
+}
+
+QString AppSettings::defaultPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+         + QStringLiteral("/SondePredict/sondepredict.ini");
+}
+
+AppSettings AppSettings::load(const QString &path, QString *error)
+{
+    AppSettings out;
+    if (!QFileInfo::exists(path))
+        return out;
+
+    QSettings s(path, QSettings::IniFormat);
+    if (s.status() != QSettings::NoError) {
+        if (error)
+            *error = QStringLiteral("cannot read settings file %1").arg(path);
+        return out;
+    }
+
+    const int count = s.beginReadArray(QStringLiteral("locations"));
+    for (int i = 0; i < count; ++i) {
+        s.setArrayIndex(i);
+        Location l;
+        l.name = s.value(QStringLiteral("name")).toString();
+        l.position.lat = readDouble(s, QStringLiteral("lat"), 0.0);
+        l.position.lon = readDouble(s, QStringLiteral("lon"), 0.0);
+        l.altitude = readDouble(s, QStringLiteral("alt"), 0.0);
+        l.warningDistanceKm = readDouble(s, QStringLiteral("warning_km"), l.warningDistanceKm);
+        if (!l.name.isEmpty())
+            out.locations << l;
+    }
+    s.endArray();
+
+    FlightProfile &p = out.profile;
+    s.beginGroup(QStringLiteral("balloon"));
+    p.ascentRate = readDouble(s, QStringLiteral("ascent_rate"), p.ascentRate);
+    p.burstAltitude = readDouble(s, QStringLiteral("burst_altitude"), p.burstAltitude);
+    p.descentModel = s.value(QStringLiteral("descent_model")).toString() == QLatin1String("legacy")
+        ? DescentModel::Legacy : DescentModel::DensityScaled;
+    p.seaLevelDescentRate = readDouble(s, QStringLiteral("descent_rate"), p.seaLevelDescentRate);
+    p.descentExponent = readDouble(s, QStringLiteral("descent_exponent"), p.descentExponent);
+    p.legacyDescentRate = readDouble(s, QStringLiteral("legacy_descent_rate"), p.legacyDescentRate);
+    p.legacyDescentGain = readDouble(s, QStringLiteral("legacy_descent_gain"), p.legacyDescentGain);
+    s.endGroup();
+
+    s.beginGroup(QStringLiteral("network"));
+    out.network.proxyMode = proxyModeFromName(s.value(QStringLiteral("proxy_mode")).toString());
+    out.network.proxyUrl = s.value(QStringLiteral("proxy_url")).toString();
+    s.endGroup();
+
+    s.beginGroup(QStringLiteral("wind"));
+    out.wind.apiUrl = s.value(QStringLiteral("api_url")).toString();
+    out.wind.apiKey = s.value(QStringLiteral("api_key")).toString();
+    out.wind.model = s.value(QStringLiteral("model"), out.wind.model).toString();
+    out.wind.gridStep = readDouble(s, QStringLiteral("grid_step"), out.wind.gridStep);
+    s.endGroup();
+
+    s.beginGroup(QStringLiteral("general"));
+    out.general.googleEarthPath = s.value(QStringLiteral("google_earth")).toString();
+    out.general.overwritePredictions = readBool(s, QStringLiteral("overwrite_predictions"), out.general.overwritePredictions);
+    out.general.useUtc = readBool(s, QStringLiteral("use_utc"), out.general.useUtc);
+    s.endGroup();
+
+    if (s.childGroups().contains(QStringLiteral("schedule"))) {
+        s.beginGroup(QStringLiteral("schedule"));
+        ScheduleRule rule;
+        rule.siteName = s.value(QStringLiteral("site")).toString();
+        rule.homeName = s.value(QStringLiteral("home")).toString();
+        rule.days = splitInts(s.value(QStringLiteral("days")));
+        rule.hours = splitInts(s.value(QStringLiteral("hours")));
+        rule.intervalHours = s.value(QStringLiteral("interval_hours"), 0).toInt();
+        out.schedule = rule;
+        s.endGroup();
+    }
+
+    s.beginGroup(QStringLiteral("manual_run"));
+    out.manualRun.siteName = s.value(QStringLiteral("site")).toString();
+    out.manualRun.homeName = s.value(QStringLiteral("home")).toString();
+    out.manualRun.hour = s.value(QStringLiteral("hour"), out.manualRun.hour).toInt();
+    s.endGroup();
+
+    return out;
+}
+
+bool AppSettings::save(const QString &path, QString *error) const
+{
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QSettings s(path, QSettings::IniFormat);
+    s.clear();
+    s.setValue(QStringLiteral("format"), kFormatVersion);
+
+    s.beginWriteArray(QStringLiteral("locations"), static_cast<int>(locations.size()));
+    for (int i = 0; i < locations.size(); ++i) {
+        const Location &l = locations[i];
+        s.setArrayIndex(i);
+        s.setValue(QStringLiteral("name"), l.name);
+        s.setValue(QStringLiteral("lat"), QString::number(l.position.lat, 'f', 6));
+        s.setValue(QStringLiteral("lon"), QString::number(l.position.lon, 'f', 6));
+        s.setValue(QStringLiteral("alt"), QString::number(l.altitude, 'g', 10));
+        s.setValue(QStringLiteral("warning_km"), QString::number(l.warningDistanceKm, 'g', 10));
+    }
+    s.endArray();
+
+    s.beginGroup(QStringLiteral("balloon"));
+    s.setValue(QStringLiteral("ascent_rate"), QString::number(profile.ascentRate, 'g', 10));
+    s.setValue(QStringLiteral("burst_altitude"), QString::number(profile.burstAltitude, 'g', 10));
+    s.setValue(QStringLiteral("descent_model"), descentModelName(profile.descentModel));
+    s.setValue(QStringLiteral("descent_rate"), QString::number(profile.seaLevelDescentRate, 'g', 10));
+    s.setValue(QStringLiteral("descent_exponent"), QString::number(profile.descentExponent, 'g', 10));
+    s.setValue(QStringLiteral("legacy_descent_rate"), QString::number(profile.legacyDescentRate, 'g', 10));
+    s.setValue(QStringLiteral("legacy_descent_gain"), QString::number(profile.legacyDescentGain, 'g', 10));
+    s.endGroup();
+
+    s.beginGroup(QStringLiteral("network"));
+    s.setValue(QStringLiteral("proxy_mode"), proxyModeName(network.proxyMode));
+    s.setValue(QStringLiteral("proxy_url"), network.proxyUrl);
+    s.endGroup();
+
+    s.beginGroup(QStringLiteral("wind"));
+    s.setValue(QStringLiteral("api_url"), wind.apiUrl);
+    s.setValue(QStringLiteral("api_key"), wind.apiKey);
+    s.setValue(QStringLiteral("model"), wind.model);
+    s.setValue(QStringLiteral("grid_step"), QString::number(wind.gridStep, 'g', 10));
+    s.endGroup();
+
+    s.beginGroup(QStringLiteral("general"));
+    s.setValue(QStringLiteral("google_earth"), general.googleEarthPath);
+    s.setValue(QStringLiteral("overwrite_predictions"), general.overwritePredictions);
+    s.setValue(QStringLiteral("use_utc"), general.useUtc);
+    s.endGroup();
+
+    if (schedule) {
+        s.beginGroup(QStringLiteral("schedule"));
+        s.setValue(QStringLiteral("site"), schedule->siteName);
+        s.setValue(QStringLiteral("home"), schedule->homeName);
+        s.setValue(QStringLiteral("days"), joinInts(schedule->days));
+        s.setValue(QStringLiteral("hours"), joinInts(schedule->hours));
+        s.setValue(QStringLiteral("interval_hours"), schedule->intervalHours);
+        s.endGroup();
+    }
+
+    s.beginGroup(QStringLiteral("manual_run"));
+    s.setValue(QStringLiteral("site"), manualRun.siteName);
+    s.setValue(QStringLiteral("home"), manualRun.homeName);
+    s.setValue(QStringLiteral("hour"), manualRun.hour);
+    s.endGroup();
+
+    s.sync();
+    if (s.status() != QSettings::NoError) {
+        if (error)
+            *error = QStringLiteral("cannot write settings file %1").arg(path);
+        return false;
+    }
+    return true;
+}
+
+} // namespace sp

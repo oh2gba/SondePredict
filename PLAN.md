@@ -87,10 +87,24 @@ credentials on the very first request (rare) are not supported by Qt.
   back that far). Use newer tracker logs with `--compare`, or add an NCEI GFS archive
   reader later if needed.
 
-### Phase 2 — storage and settings
+### Phase 2 — storage and settings ✅
 * SQLite schema for predictions and track points (successor of the v3 `tracks` / `waypoints` tables).
 * Settings: locations (name, lat, lon, alt, warning distance), balloon profile, network proxy, units.
 * One-time import of a v3 `config.ini` (locations, balloon settings, schedule).
+
+Done: `settings` (INI via QSettings, `<config dir>/SondePredict/sondepredict.ini`),
+`predictionstore` (SQLite, `<data dir>/SondePredict/predictions.sqlite`, versioned with
+`PRAGMA user_version`, track points cascade-deleted), `v3import` (a small ConfigObj reader;
+locations in v3 order, balloon values, grid size, proxy, Google Earth path, batch schedule,
+last manual-run choices), and `network` (proxy: system / none / manual). `sp-cli` gained
+`--import-v3`, `--locations`, `--save`, `--list`, `--config`, `--db`, and accepts saved
+location names for `--launch` / `--home`. 11 test suites pass.
+
+Import rules: v3 descent rate and gain are kept as the Legacy model and only made active if
+they differ from v3's defaults (40 m/s, 1.0); locations whose name already exists are kept;
+a schedule location missing from `[locations]` is added from the schedule's own coordinates.
+Not imported: v3's `data.dat` (old predictions on old forecasts) and window geometry.
+Units (km/mi) moved to phase 5.
 
 ### Phase 3 — desktop UI
 * Main window in the v3 layout: prediction tree by date on the left (bold when the landing is
