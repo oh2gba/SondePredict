@@ -4,6 +4,8 @@
 
 #include <QDialog>
 
+#include <optional>
+
 class QButtonGroup;
 class QCheckBox;
 class QComboBox;
@@ -31,6 +33,12 @@ private:
     QWidget *buildBalloonTab();
     QWidget *buildWindTab();
     QWidget *buildGeneralTab();
+    QWidget *buildBatchTab();
+
+    // Batch
+    void refreshBatchLocations();
+    std::optional<sp::ScheduleRule> scheduleFromForm() const;
+    void updateBatchSummary();
 
     // Locations
     void refreshLocationList(const QString &select = {});
@@ -76,4 +84,12 @@ private:
     QLineEdit *m_googleEarth = nullptr;
     QCheckBox *m_overwrite = nullptr;
     QCheckBox *m_useUtc = nullptr;
+
+    QComboBox *m_batchSite = nullptr;
+    QComboBox *m_batchHome = nullptr;
+    QListWidget *m_batchDays = nullptr;
+    QListWidget *m_batchHours = nullptr;
+    QSpinBox *m_batchMinute = nullptr;
+    QSpinBox *m_batchInterval = nullptr;
+    QLabel *m_batchSummary = nullptr;
 };

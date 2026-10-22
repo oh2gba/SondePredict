@@ -24,7 +24,10 @@ public:
     Predictor(WindSource *source, std::shared_ptr<WindField> field, QObject *parent = nullptr);
 
     // Starts a prediction; finished() or failed() is always emitted later, never from here.
-    void start(const LaunchParams &params);
+    // `alsoCoverUntil` (unix seconds) widens the forecast hours fetched so that later
+    // launches up to that time find their data cached; Open-Meteo charges per location and
+    // variable, so the extra hours cost nothing.
+    void start(const LaunchParams &params, qint64 alsoCoverUntil = 0);
     void cancel();
     bool isRunning() const { return m_running; }
 

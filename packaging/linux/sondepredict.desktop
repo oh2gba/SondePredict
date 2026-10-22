@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sonde Predict
+GenericName=Radiosonde landing predictor
+Comment=Predict radiosonde flight paths and landing points from GFS winds
+Exec=sondepredict
+Icon=sondepredict
+Terminal=false
+Categories=Science;Geoscience;HamRadio;
+Keywords=radiosonde;balloon;sonde;hunting;GFS;prediction;

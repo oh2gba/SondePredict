@@ -6,6 +6,8 @@
 
 #include <QTimer>
 
+#include <algorithm>
+#include <cstdint>
 #include <functional>
 
 namespace sptest {

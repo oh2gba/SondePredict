@@ -1,5 +1,6 @@
 qt_add_library(sp_core STATIC
     atmosphere.cpp atmosphere.h
+    batch.cpp batch.h
     flightprofile.cpp flightprofile.h
     geo.cpp geo.h
     network.cpp network.h
@@ -9,6 +10,7 @@ qt_add_library(sp_core STATIC
     settings.cpp settings.h
     simulator.cpp simulator.h
     trackerlog.cpp trackerlog.h
+    trackexport.cpp trackexport.h
     v3import.cpp v3import.h
     windfield.cpp windfield.h
     windsource.h

@@ -1,5 +1,6 @@
 #include "settingsdialog.h"
 
+#include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
@@ -19,7 +20,7 @@ sp::AppSettings sample()
     s.locations << sp::Location{QStringLiteral("Jokioinen"), {60.814, 23.499}, 104.0, 30.0}
                 << sp::Location{QStringLiteral("Home"), {60.2055, 24.6559}, 25.0, 40.0};
     s.manualRun = {QStringLiteral("Jokioinen"), QStringLiteral("Home"), 11, 15};
-    s.schedule = sp::ScheduleRule{QStringLiteral("Jokioinen"), QStringLiteral("Home"), {0, 1}, {11, 23}, 6};
+    s.schedule = sp::ScheduleRule{QStringLiteral("Jokioinen"), QStringLiteral("Home"), {0, 1}, {11, 23}, 15, 6, false};
     return s;
 }
 
@@ -124,6 +125,28 @@ private slots:
         QCOMPARE(dialog.settings().profile.ascentRate, 5.7);
         QCOMPARE(dialog.settings().profile.burstAltitude, 31000.0);
         QCOMPARE(dialog.settings().profile.descentModel, sp::DescentModel::Legacy);
+    }
+
+    void batchTab()
+    {
+        sp::AppSettings in = sample();
+        in.schedule->autoRun = true;
+        SettingsDialog dialog(in);
+        QCOMPARE(child<QComboBox>(dialog, "batchSite")->currentText(), QStringLiteral("Jokioinen"));
+        QCOMPARE(child<QComboBox>(dialog, "batchHome")->currentText(), QStringLiteral("Home"));
+        auto *days = child<QListWidget>(dialog, "batchDays");
+        QCOMPARE(days->item(1)->checkState(), Qt::Checked);
+        days->item(2)->setCheckState(Qt::Checked);
+        child<QListWidget>(dialog, "batchHours")->item(23)->setCheckState(Qt::Unchecked);
+        child<QSpinBox>(dialog, "batchMinute")->setValue(30);
+        dialog.accept();
+        const auto &rule = dialog.settings().schedule;
+        QVERIFY(rule);
+        QCOMPARE(rule->days, (QList<int>{0, 1, 2}));
+        QCOMPARE(rule->hours, (QList<int>{11}));
+        QCOMPARE(rule->minute, 30);
+        QCOMPARE(rule->intervalHours, 6);
+        QVERIFY(rule->autoRun); // kept: switched on and off in the main window
     }
 
     void manualProxyNeedsAddress()

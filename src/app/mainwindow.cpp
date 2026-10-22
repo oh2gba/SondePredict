@@ -3,6 +3,7 @@
 #include "mapwidget.h"
 #include "network.h"
 #include "settingsdialog.h"
+#include "trackexport.h"
 #include "v3import.h"
 
 #include <QAction>
@@ -10,6 +11,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QDateEdit>
 #include <QDir>
 #include <QFileDialog>
@@ -21,15 +23,19 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSplitter>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTextBrowser>
 #include <QTimeEdit>
 #include <QTimeZone>
 #include <QTreeWidget>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -99,6 +105,14 @@ MainWindow::MainWindow(QString configPath, QString dbPath, QWidget *parent)
         m_clockLabel->setText(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss 'UTC'")));
     });
     m_clock.start(1000);
+
+    m_scheduleTimer.setTimerType(Qt::VeryCoarseTimer);
+    connect(&m_scheduleTimer, &QTimer::timeout, this, [this]() {
+        updateScheduleTimer(); // schedules the next one
+        startBatch(true);
+    });
+    updateBatchControls();
+    updateScheduleTimer();
     m_clockLabel->setText(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss 'UTC'")));
 }
 
@@ -120,7 +134,8 @@ void MainWindow::buildUi()
     connect(m_deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelected);
     m_earthButton = new QPushButton(tr("&Google Earth"));
     m_earthButton->setEnabled(false);
-    m_earthButton->setToolTip(tr("Export to Google Earth (KML) is not available yet."));
+    m_earthButton->setToolTip(tr("Show the selected predictions in Google Earth"));
+    connect(m_earthButton, &QPushButton::clicked, this, &MainWindow::openInGoogleEarth);
 
     auto *treeButtons = new QHBoxLayout;
     treeButtons->addWidget(m_deleteButton);
@@ -147,12 +162,19 @@ void MainWindow::buildUi()
     m_runButton = new QPushButton(tr("&Start"));
     m_runButton->setObjectName(QStringLiteral("runButton"));
     m_runButton->setDefault(true);
-    connect(m_runButton, &QPushButton::clicked, this, &MainWindow::runPrediction);
+    connect(m_runButton, &QPushButton::clicked, this, [this]() { isBusy() ? stopRunning() : runPrediction(); });
     m_batchButton = new QPushButton(tr("Start a &batch"));
-    m_batchButton->setEnabled(false);
-    m_batchButton->setToolTip(tr("Batch runs are not available yet."));
+    m_batchButton->setObjectName(QStringLiteral("batchButton"));
+    connect(m_batchButton, &QPushButton::clicked, this, [this]() { startBatch(false); });
     m_schedulerCheck = new QCheckBox(tr("Run scheduled batch tasks"));
-    m_schedulerCheck->setEnabled(false);
+    m_schedulerCheck->setObjectName(QStringLiteral("schedulerCheck"));
+    connect(m_schedulerCheck, &QCheckBox::toggled, this, [this](bool on) {
+        if (!m_settings.schedule || m_settings.schedule->autoRun == on)
+            return;
+        m_settings.schedule->autoRun = on;
+        saveSettings();
+        updateScheduleTimer();
+    });
 
     auto *form = new QFormLayout;
     form->addRow(tr("Launch location"), m_siteCombo);
@@ -218,6 +240,9 @@ void MainWindow::buildUi()
 void MainWindow::buildMenus()
 {
     QMenu *file = menuBar()->addMenu(tr("&File"));
+    m_selectionActions << file->addAction(tr("Export selected as &KML (Google Earth)..."), this, [this]() { exportSelected(false); });
+    m_selectionActions << file->addAction(tr("Export selected as &GPX (GPS, phone)..."), this, [this]() { exportSelected(true); });
+    file->addSeparator();
     file->addAction(tr("&Import Sonde Predict v3 settings..."), this, &MainWindow::importV3Settings);
     file->addSeparator();
     QAction *quit = file->addAction(tr("&Quit"), this, &QWidget::close);
@@ -229,6 +254,12 @@ void MainWindow::buildMenus()
     settings->setObjectName(QStringLiteral("settingsAction"));
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
+    help->addAction(tr("Open &log file"), this, [this]() {
+        const QString log = QFileInfo(m_dbPath).dir().filePath(QStringLiteral("log.txt"));
+        if (!QFileInfo::exists(log) || !QDesktopServices::openUrl(QUrl::fromLocalFile(log)))
+            QMessageBox::information(this, tr("Log file"), tr("The log file is %1").arg(QDir::toNativeSeparators(log)));
+    });
+    help->addSeparator();
     help->addAction(tr("&About Sonde Predict"), this, &MainWindow::showAbout);
     help->addAction(tr("About &Qt"), qApp, &QApplication::aboutQt);
 }
@@ -254,6 +285,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     if (m_predictor)
         m_predictor->cancel();
+    if (m_batch)
+        m_batch->cancel();
     rememberManualRunChoices();
     saveSettings();
     saveWindowState();
@@ -270,7 +303,8 @@ void MainWindow::applySettings()
         options.baseUrl = m_settings.wind.apiUrl;
     options.apiKey = m_settings.wind.apiKey;
     options.model = m_settings.wind.model;
-    m_predictor.reset(); // it refers to the old client
+    m_predictor.reset(); // they refer to the old client
+    m_batch.reset();
     m_client = std::make_unique<sp::OpenMeteoClient>(&m_network, options);
     connect(m_client.get(), &sp::OpenMeteoClient::rateLimited, this, [this](int seconds) {
         m_statusLabel->setText(tr("Open-Meteo rate limit reached; continuing in %1 s...").arg(seconds));
@@ -308,7 +342,8 @@ void MainWindow::refreshLocationCombos()
         m_siteCombo->setCurrentIndex(i);
     if (const int i = m_homeCombo->findText(m_settings.manualRun.homeName); i >= 0)
         m_homeCombo->setCurrentIndex(i);
-    m_runButton->setEnabled(m_siteCombo->count() > 0 && !(m_predictor && m_predictor->isRunning()));
+    m_runButton->setEnabled(m_siteCombo->count() > 0 || isBusy());
+    updateBatchControls();
 }
 
 void MainWindow::rememberManualRunChoices()
@@ -411,6 +446,9 @@ void MainWindow::onSelectionChanged()
 {
     const QList<qint64> ids = selectedIds();
     m_deleteButton->setEnabled(!ids.isEmpty());
+    m_earthButton->setEnabled(!ids.isEmpty());
+    for (QAction *action : m_selectionActions)
+        action->setEnabled(!ids.isEmpty());
     if (ids.isEmpty()) {
         showOverview();
         return;
@@ -504,6 +542,18 @@ std::optional<QDateTime> MainWindow::launchDateTime() const
     return t.isValid() ? std::optional(t) : std::nullopt;
 }
 
+std::shared_ptr<sp::WindField> MainWindow::windField()
+{
+    // Reuse downloaded winds for a while; start fresh when stale or the grid changed.
+    const QDateTime nowUtc = QDateTime::currentDateTimeUtc();
+    if (!m_field || m_field->gridStep() != m_settings.wind.gridStep || m_fieldCreated.secsTo(nowUtc) > kCacheMaxAgeSecs) {
+        m_field = std::make_shared<sp::WindField>(m_settings.wind.gridStep);
+        m_fieldCreated = nowUtc;
+        m_predictor.reset();
+    }
+    return m_field;
+}
+
 void MainWindow::runPrediction()
 {
     const sp::Location *site = m_settings.location(m_siteCombo->currentText());
@@ -530,13 +580,7 @@ void MainWindow::runPrediction()
     params.launchTime = launch->toSecsSinceEpoch();
     params.profile = m_settings.profile;
 
-    // Reuse downloaded winds for a while; start fresh when stale or the grid changed.
-    const QDateTime nowUtc = QDateTime::currentDateTimeUtc();
-    if (!m_field || m_field->gridStep() != m_settings.wind.gridStep || m_fieldCreated.secsTo(nowUtc) > kCacheMaxAgeSecs) {
-        m_field = std::make_shared<sp::WindField>(m_settings.wind.gridStep);
-        m_fieldCreated = nowUtc;
-        m_predictor.reset();
-    }
+    windField();
     if (!m_predictor) {
         m_predictor = std::make_unique<sp::Predictor>(m_client.get(), m_field);
         connect(m_predictor.get(), &sp::Predictor::progress, this, [this](const QString &message) { m_statusLabel->setText(message + u'…'); });
@@ -574,18 +618,192 @@ void MainWindow::onPredictionFinished(const sp::Prediction &prediction)
 
 void MainWindow::onPredictionFailed(const QString &error)
 {
+    qWarning().noquote() << "Prediction failed:" << error;
     setBusy(false, tr("Prediction failed"));
     QMessageBox::warning(this, tr("Prediction failed"), error);
 }
 
+bool MainWindow::isBusy() const
+{
+    return m_busy;
+}
+
 void MainWindow::setBusy(bool busy, const QString &message)
 {
+    m_busy = busy;
     m_progress->setVisible(busy);
-    m_runButton->setEnabled(!busy && m_siteCombo->count() > 0);
+    m_runButton->setText(busy ? tr("&Stop") : tr("&Start"));
+    m_runButton->setEnabled(busy || m_siteCombo->count() > 0);
     if (QAction *settings = findChild<QAction *>(QStringLiteral("settingsAction")))
         settings->setEnabled(!busy);
+    updateBatchControls();
     if (!message.isEmpty())
         m_statusLabel->setText(message);
+}
+
+void MainWindow::stopRunning()
+{
+    if (m_predictor)
+        m_predictor->cancel();
+    if (m_batch && m_batch->isRunning()) {
+        m_batch->cancel();
+        refreshTree(selectedIds().value(0)); // show what the batch saved so far
+    }
+    setBusy(false, tr("Stopped"));
+}
+
+void MainWindow::updateBatchControls()
+{
+    const bool haveRule = m_settings.schedule.has_value();
+    const bool busy = isBusy();
+    m_batchButton->setEnabled(haveRule && !busy);
+    m_batchButton->setToolTip(haveRule ? tr("Run the batch set up in Settings → Batch")
+                                       : tr("Set up a batch in Settings → Batch first"));
+    const bool canSchedule = haveRule && m_settings.schedule->intervalHours > 0;
+    const QSignalBlocker blocker(m_schedulerCheck);
+    m_schedulerCheck->setEnabled(canSchedule);
+    m_schedulerCheck->setChecked(canSchedule && m_settings.schedule->autoRun);
+    if (!canSchedule)
+        m_schedulerCheck->setToolTip(tr("Set a repeat interval in Settings → Batch first"));
+}
+
+void MainWindow::updateScheduleTimer()
+{
+    const bool on = m_settings.schedule && m_settings.schedule->autoRun && m_settings.schedule->intervalHours > 0;
+    if (!on) {
+        m_scheduleTimer.stop();
+        m_nextScheduledRun = {};
+        if (m_schedulerCheck->isEnabled())
+            m_schedulerCheck->setToolTip(tr("Repeat the batch every %n hour(s) while Sonde Predict is open", nullptr,
+                                            m_settings.schedule ? m_settings.schedule->intervalHours : 0));
+        return;
+    }
+    const int ms = m_settings.schedule->intervalHours * 3600 * 1000;
+    m_scheduleTimer.start(ms);
+    m_nextScheduledRun = QDateTime::currentDateTimeUtc().addMSecs(ms);
+    m_schedulerCheck->setToolTip(tr("Next batch at %1").arg(formatTime(double(m_nextScheduledRun.toSecsSinceEpoch()))));
+}
+
+void MainWindow::startBatch(bool scheduled)
+{
+    if (isBusy() || !m_settings.schedule) {
+        if (scheduled)
+            qInfo() << "Scheduled batch skipped: busy or no batch set up";
+        return;
+    }
+    const sp::BatchPlan plan = sp::planBatch(*m_settings.schedule, m_settings, QDateTime::currentSecsSinceEpoch(), kMaxDaysAhead);
+    if (!plan.error.isEmpty() || plan.jobs.empty()) {
+        const QString error = plan.error.isEmpty() ? tr("all launches are beyond the forecast range") : plan.error;
+        qWarning().noquote() << "Batch not started:" << error;
+        if (scheduled)
+            m_statusLabel->setText(tr("Scheduled batch not started: %1").arg(error));
+        else
+            QMessageBox::information(this, tr("Batch"), tr("The batch cannot start: %1.").arg(error));
+        return;
+    }
+
+    m_batch = std::make_unique<sp::BatchRunner>(m_client.get(), windField());
+    m_batchScheduled = scheduled;
+    m_batchSaved = 0;
+    m_batchErrors.clear();
+    connect(m_batch.get(), &sp::BatchRunner::jobStarted, this, [this](int index, int total, const sp::BatchJob &job) {
+        m_statusLabel->setText(tr("Batch %1/%2: %3 %4…").arg(index + 1).arg(total).arg(job.siteName, formatTime(double(job.params.launchTime))));
+    });
+    connect(m_batch.get(), &sp::BatchRunner::jobFinished, this,
+            [this](int, const sp::BatchJob &job, const sp::Prediction &prediction) { onBatchJobFinished(job, prediction); });
+    connect(m_batch.get(), &sp::BatchRunner::jobFailed, this, [this](int, const sp::BatchJob &job, const QString &error) {
+        m_batchErrors << QStringLiteral("%1: %2").arg(formatTime(double(job.params.launchTime)), error);
+        qWarning().noquote() << "Batch prediction failed:" << m_batchErrors.last();
+    });
+    connect(m_batch.get(), &sp::BatchRunner::finished, this, [this](int succeeded, int failed) {
+        setBusy(false, tr("Batch done: %n prediction(s) saved", nullptr, m_batchSaved)
+                           + (failed ? tr(", %n failed", nullptr, failed) : QString()));
+        qInfo() << "Batch done:" << succeeded << "succeeded," << failed << "failed";
+        refreshTree();
+        if (failed && !m_batchScheduled) {
+            QMessageBox::warning(this, tr("Batch"), tr("%n prediction(s) failed:", nullptr, failed) + u'\n'
+                                     + m_batchErrors.mid(0, 5).join(u'\n'));
+        }
+    });
+
+    qInfo() << "Batch started:" << plan.jobs.size() << "predictions" << (scheduled ? "(scheduled)" : "");
+    setBusy(true, tr("Starting a batch of %n prediction(s)…", nullptr, int(plan.jobs.size())));
+    m_batch->start(plan.jobs);
+}
+
+void MainWindow::onBatchJobFinished(const sp::BatchJob &job, const sp::Prediction &prediction)
+{
+    sp::PredictionRecord record;
+    record.siteName = job.siteName;
+    record.homeName = job.homeName;
+    record.home = job.home;
+    record.manual = false;
+    record.model = m_settings.wind.model;
+    record.prediction = prediction;
+    if (m_store.isOpen() && m_store.save(record, m_settings.general.overwritePredictions)) {
+        ++m_batchSaved;
+        refreshTree(selectedIds().value(0)); // show results as they come in
+    } else {
+        m_batchErrors << tr("could not save: %1").arg(m_store.lastError());
+    }
+}
+
+std::vector<sp::PredictionRecord> MainWindow::selectedRecords() const
+{
+    std::vector<sp::PredictionRecord> records;
+    for (qint64 id : selectedIds()) {
+        if (auto record = m_store.load(id))
+            records.push_back(std::move(*record));
+    }
+    return records;
+}
+
+void MainWindow::openInGoogleEarth()
+{
+    const auto records = selectedRecords();
+    if (records.empty())
+        return;
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/kml");
+    QDir().mkpath(dir);
+    const QString path = QDir(dir).filePath(QStringLiteral("sondepredict-%1.kml")
+                                                .arg(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss"))));
+    if (const QString error = sp::writeFile(path, sp::toKml(records)); !error.isEmpty()) {
+        QMessageBox::warning(this, tr("Google Earth"), error);
+        return;
+    }
+
+    const QString earth = m_settings.general.googleEarthPath;
+    const bool started = !earth.isEmpty() && QFileInfo(earth).isExecutable()
+        ? QProcess::startDetached(earth, {QDir::toNativeSeparators(path)})
+        : QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    if (!started) {
+        QMessageBox::information(this, tr("Google Earth"),
+                                 tr("No program opened the KML file. Install Google Earth Pro, or set its path in "
+                                    "Settings → General.\n\nThe file was saved as %1").arg(QDir::toNativeSeparators(path)));
+    } else {
+        m_statusLabel->setText(tr("Opened %n prediction(s) in Google Earth", nullptr, int(records.size())));
+    }
+}
+
+void MainWindow::exportSelected(bool gpx)
+{
+    const auto records = selectedRecords();
+    if (records.empty())
+        return;
+    const sp::PredictionRecord &first = records.front();
+    QString name = QStringLiteral("%1-%2").arg(first.siteName, QDateTime::fromSecsSinceEpoch(first.prediction.params.launchTime, QTimeZone::UTC)
+                                                                   .toString(QStringLiteral("yyyy-MM-dd-HHmm")));
+    name.replace(QRegularExpression(QStringLiteral("[^\\w.-]+")), QStringLiteral("_"));
+    const QString suffix = gpx ? QStringLiteral("gpx") : QStringLiteral("kml");
+    const QString path = QFileDialog::getSaveFileName(this, gpx ? tr("Export GPX") : tr("Export KML"),
+                                                      QDir(QDir::homePath()).filePath(name + u'.' + suffix),
+                                                      gpx ? tr("GPX files (*.gpx)") : tr("KML files (*.kml)"));
+    if (path.isEmpty())
+        return;
+    if (const QString error = sp::writeFile(path, gpx ? sp::toGpx(records) : sp::toKml(records)); !error.isEmpty())
+        QMessageBox::warning(this, tr("Export"), error);
+    else
+        m_statusLabel->setText(tr("Saved %1").arg(QDir::toNativeSeparators(path)));
 }
 
 void MainWindow::deleteSelected()
@@ -613,6 +831,7 @@ void MainWindow::openSettings()
     applySettings();
     refreshLocationCombos();
     refreshTree(selectedIds().value(0));
+    updateScheduleTimer();
 }
 
 void MainWindow::importV3Settings()

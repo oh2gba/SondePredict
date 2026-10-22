@@ -158,6 +158,8 @@ AppSettings AppSettings::load(const QString &path, QString *error)
         rule.days = splitInts(s.value(QStringLiteral("days")));
         rule.hours = splitInts(s.value(QStringLiteral("hours")));
         rule.intervalHours = s.value(QStringLiteral("interval_hours"), 0).toInt();
+        rule.minute = s.value(QStringLiteral("minute"), 0).toInt();
+        rule.autoRun = readBool(s, QStringLiteral("auto_run"), false);
         out.schedule = rule;
         s.endGroup();
     }
@@ -226,6 +228,8 @@ bool AppSettings::save(const QString &path, QString *error) const
         s.setValue(QStringLiteral("days"), joinInts(schedule->days));
         s.setValue(QStringLiteral("hours"), joinInts(schedule->hours));
         s.setValue(QStringLiteral("interval_hours"), schedule->intervalHours);
+        s.setValue(QStringLiteral("minute"), schedule->minute);
+        s.setValue(QStringLiteral("auto_run"), schedule->autoRun);
         s.endGroup();
     }
 

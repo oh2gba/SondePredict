@@ -1,10 +1,12 @@
 // sp-cli: command-line front end to the Sonde Predict core.
 
+#include "batch.h"
 #include "network.h"
 #include "openmeteo.h"
 #include "predictionstore.h"
 #include "predictor.h"
 #include "settings.h"
+#include "trackexport.h"
 #include "trackerlog.h"
 #include "v3import.h"
 
@@ -17,6 +19,7 @@
 #include <QTimeZone>
 
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 
 namespace {
@@ -247,7 +250,11 @@ int main(int argc, char *argv[])
         {QStringLiteral("api-key"), QStringLiteral("Open-Meteo API key (subscription)."), QStringLiteral("key")},
         {QStringLiteral("csv"), QStringLiteral("Write the predicted track to a CSV file."), QStringLiteral("file")},
         {QStringLiteral("compare"), QStringLiteral("Compare with a received flight (RS41Tracker CSV)."), QStringLiteral("file")},
-        {QStringLiteral("save"), QStringLiteral("Store the prediction in the prediction database.")},
+        {QStringLiteral("kml"), QStringLiteral("Write the prediction(s) as KML for Google Earth."), QStringLiteral("file")},
+        {QStringLiteral("gpx"), QStringLiteral("Write the prediction(s) as GPX for GPS and phone apps."), QStringLiteral("file")},
+        {QStringLiteral("save"), QStringLiteral("Store the prediction(s) in the prediction database.")},
+        {QStringLiteral("batch"), QStringLiteral("Run the batch set up in the settings (days × launch hours).")},
+        {QStringLiteral("export"), QStringLiteral("Export stored predictions (ids from --list) with --kml / --gpx and exit."), QStringLiteral("ids")},
         {QStringLiteral("list"), QStringLiteral("List stored predictions and exit.")},
         {QStringLiteral("locations"), QStringLiteral("List saved locations and exit.")},
         {QStringLiteral("import-v3"), QStringLiteral("Import a Sonde Predict v3 config.ini into the settings and exit."), QStringLiteral("config.ini")},
@@ -271,30 +278,38 @@ int main(int argc, char *argv[])
     if (parser.isSet(QStringLiteral("locations")))
         return listLocations(settings);
 
-    // Launch site and your location: options, else the last manual run from the settings.
-    const QString siteText = parser.isSet(QStringLiteral("launch")) ? parser.value(QStringLiteral("launch")) : settings.manualRun.siteName;
-    if (siteText.isEmpty() || !parser.isSet(QStringLiteral("time")))
-        die(QStringLiteral("--launch and --time are required (see --help)"));
-    const ResolvedLocation site = resolveLocation(siteText, settings, "launch");
+    // Stored predictions to KML / GPX, no network needed.
+    sp::PredictionStore store;
+    const bool needStore = parser.isSet(QStringLiteral("save")) || parser.isSet(QStringLiteral("export"));
+    if (needStore && !store.open(dbPath)) // before spending API quota on results that cannot be saved
+        die(store.lastError());
 
-    std::optional<ResolvedLocation> home;
-    const QString homeText = parser.isSet(QStringLiteral("home")) ? parser.value(QStringLiteral("home")) : settings.manualRun.homeName;
-    if (!homeText.isEmpty())
-        home = resolveLocation(homeText, settings, "home");
+    const auto writeExports = [&parser](const std::vector<sp::PredictionRecord> &records) {
+        for (const auto &[option, gpx] : {std::pair{QStringLiteral("kml"), false}, std::pair{QStringLiteral("gpx"), true}}) {
+            if (!parser.isSet(option))
+                continue;
+            const QString path = parser.value(option);
+            if (const QString error = sp::writeFile(path, gpx ? sp::toGpx(records) : sp::toKml(records)); !error.isEmpty())
+                die(error);
+            out() << (gpx ? "GPX" : "KML") << " written to " << path << '\n';
+        }
+    };
 
-    sp::LaunchParams params;
-    params.site = site.point;
-    params.siteAltitude = site.altitude;
+    if (parser.isSet(QStringLiteral("export"))) {
+        if (!parser.isSet(QStringLiteral("kml")) && !parser.isSet(QStringLiteral("gpx")))
+            die(QStringLiteral("--export needs --kml and/or --gpx"));
+        std::vector<sp::PredictionRecord> records;
+        for (const QString &id : parser.value(QStringLiteral("export")).split(u',', Qt::SkipEmptyParts)) {
+            auto record = store.load(id.trimmed().toLongLong());
+            if (!record)
+                die(QStringLiteral("no stored prediction %1 (see --list)").arg(id.trimmed()));
+            records.push_back(std::move(*record));
+        }
+        writeExports(records);
+        return 0;
+    }
 
-    QDateTime launch = QDateTime::fromString(parser.value(QStringLiteral("time")), Qt::ISODate);
-    if (!launch.isValid())
-        die(QStringLiteral("--time must look like 2026-10-23T11:15"));
-    if (launch.timeSpec() == Qt::LocalTime)
-        launch = QDateTime(launch.date(), launch.time(), QTimeZone::UTC);
-    params.launchTime = launch.toSecsSinceEpoch();
-
-    sp::FlightProfile &profile = params.profile;
-    profile = settings.profile;
+    sp::FlightProfile profile = settings.profile;
     if (parser.isSet(QStringLiteral("ascent"))) profile.ascentRate = number(parser, QStringLiteral("ascent"));
     if (parser.isSet(QStringLiteral("burst"))) profile.burstAltitude = number(parser, QStringLiteral("burst"));
     if (parser.isSet(QStringLiteral("descent"))) profile.seaLevelDescentRate = number(parser, QStringLiteral("descent"));
@@ -320,18 +335,92 @@ int main(int argc, char *argv[])
     if (const QString proxyError = sp::applyProxy(settings.network); !proxyError.isEmpty())
         QTextStream(stderr) << "sp-cli: " << proxyError << Qt::endl;
 
-    // Open the database before spending API quota on a prediction that cannot be saved.
-    sp::PredictionStore store;
-    if (parser.isSet(QStringLiteral("save")) && !store.open(dbPath))
-        die(store.lastError());
-
     QNetworkAccessManager network;
     sp::OpenMeteoClient client(&network, options);
-    sp::Predictor predictor(&client, std::make_shared<sp::WindField>(grid));
-
+    auto field = std::make_shared<sp::WindField>(grid);
     QObject::connect(&client, &sp::OpenMeteoClient::rateLimited, [](int seconds) {
         QTextStream(stderr) << "Open-Meteo rate limit reached, retrying in " << seconds << " s..." << Qt::endl;
     });
+
+    const auto saveRecord = [&](const sp::PredictionRecord &record) {
+        const qint64 id = store.save(record, settings.general.overwritePredictions);
+        if (!id)
+            die(QStringLiteral("could not save the prediction: %1").arg(store.lastError()));
+        return id;
+    };
+
+    // ------------------------------------------------------------ batch (v3 "Start a batch")
+    if (parser.isSet(QStringLiteral("batch"))) {
+        if (!settings.schedule)
+            die(QStringLiteral("no batch is set up; create one in the app (Settings → Batch) or import it with --import-v3"));
+        sp::AppSettings batchSettings = settings;
+        batchSettings.profile = profile;
+        const sp::BatchPlan plan = sp::planBatch(*settings.schedule, batchSettings, QDateTime::currentSecsSinceEpoch());
+        if (!plan.error.isEmpty())
+            die(plan.error);
+        if (plan.jobs.empty())
+            die(QStringLiteral("all batch launches are beyond the forecast range"));
+
+        auto *runner = new sp::BatchRunner(&client, field, &app);
+        auto records = std::make_shared<std::vector<sp::PredictionRecord>>();
+        QObject::connect(runner, &sp::BatchRunner::jobStarted, [](int index, int total, const sp::BatchJob &job) {
+            QTextStream(stderr) << "Batch " << index + 1 << '/' << total << ": " << job.siteName << ' '
+                                << utc(double(job.params.launchTime), "yyyy-MM-dd HH:mm") << " UTC..." << Qt::endl;
+        });
+        QObject::connect(runner, &sp::BatchRunner::jobFinished, [&, records](int, const sp::BatchJob &job, const sp::Prediction &prediction) {
+            sp::PredictionRecord record;
+            record.siteName = job.siteName;
+            record.homeName = job.homeName;
+            record.home = job.home;
+            record.manual = false;
+            record.model = options.model;
+            record.prediction = prediction;
+            const sp::TrackPoint &land = *prediction.result.landing;
+            out() << utc(double(job.params.launchTime), "yyyy-MM-dd HH:mm") << "  " << job.siteName << " → " << position(land.position);
+            if (job.home)
+                out() << "  " << QString::number(sp::inverse(*job.home, land.position).distance / 1000.0, 'f', 1) << " km from " << job.homeName;
+            if (parser.isSet(QStringLiteral("save")))
+                out() << "  [saved as " << saveRecord(record) << ']';
+            out() << Qt::endl;
+            records->push_back(std::move(record));
+        });
+        QObject::connect(runner, &sp::BatchRunner::jobFailed, [](int, const sp::BatchJob &job, const QString &error) {
+            out() << utc(double(job.params.launchTime), "yyyy-MM-dd HH:mm") << "  " << job.siteName << "  failed: " << error << Qt::endl;
+        });
+        QObject::connect(runner, &sp::BatchRunner::finished, [&, records](int succeeded, int failed) {
+            writeExports(*records);
+            out() << succeeded << " predicted, " << failed << " failed, " << client.requestCount() << " requests" << Qt::endl;
+            QCoreApplication::exit(failed ? 2 : 0);
+        });
+        runner->start(plan.jobs);
+        return app.exec();
+    }
+
+    // ------------------------------------------------------------ single prediction
+    // Launch site and your location: options, else the last manual run from the settings.
+    const QString siteText = parser.isSet(QStringLiteral("launch")) ? parser.value(QStringLiteral("launch")) : settings.manualRun.siteName;
+    if (siteText.isEmpty() || !parser.isSet(QStringLiteral("time")))
+        die(QStringLiteral("--launch and --time are required (see --help)"));
+    const ResolvedLocation site = resolveLocation(siteText, settings, "launch");
+
+    std::optional<ResolvedLocation> home;
+    const QString homeText = parser.isSet(QStringLiteral("home")) ? parser.value(QStringLiteral("home")) : settings.manualRun.homeName;
+    if (!homeText.isEmpty())
+        home = resolveLocation(homeText, settings, "home");
+
+    sp::LaunchParams params;
+    params.site = site.point;
+    params.siteAltitude = site.altitude;
+    params.profile = profile;
+
+    QDateTime launch = QDateTime::fromString(parser.value(QStringLiteral("time")), Qt::ISODate);
+    if (!launch.isValid())
+        die(QStringLiteral("--time must look like 2026-10-23T11:15"));
+    if (launch.timeSpec() == Qt::LocalTime)
+        launch = QDateTime(launch.date(), launch.time(), QTimeZone::UTC);
+    params.launchTime = launch.toSecsSinceEpoch();
+
+    sp::Predictor predictor(&client, field);
     QObject::connect(&predictor, &sp::Predictor::progress, [](const QString &message) {
         QTextStream(stderr) << message << "..." << Qt::endl;
     });
@@ -339,29 +428,26 @@ int main(int argc, char *argv[])
     QObject::connect(&predictor, &sp::Predictor::finished, &app, [&](const sp::Prediction &prediction) {
         printPrediction(prediction, home ? std::optional(home->point) : std::nullopt, client.requestCount());
 
+        sp::PredictionRecord record;
+        record.siteName = site.name.isEmpty() ? position(site.point) : site.name;
+        if (home) {
+            record.homeName = home->name.isEmpty() ? position(home->point) : home->name;
+            record.home = home->point;
+        }
+        record.model = options.model;
+        record.prediction = prediction;
+
         if (parser.isSet(QStringLiteral("csv"))) {
             const QString path = parser.value(QStringLiteral("csv"));
             if (!writeCsv(path, prediction.result))
                 die(QStringLiteral("cannot write %1").arg(path));
             out() << "Track written to " << path << '\n';
         }
+        writeExports({record});
         if (parser.isSet(QStringLiteral("compare")))
             printComparison(prediction.result, parser.value(QStringLiteral("compare")));
-
-        if (parser.isSet(QStringLiteral("save"))) {
-            sp::PredictionRecord record;
-            record.siteName = site.name.isEmpty() ? position(site.point) : site.name;
-            if (home) {
-                record.homeName = home->name.isEmpty() ? position(home->point) : home->name;
-                record.home = home->point;
-            }
-            record.model = options.model;
-            record.prediction = prediction;
-            const qint64 id = store.save(record, settings.general.overwritePredictions);
-            if (!id)
-                die(QStringLiteral("could not save the prediction: %1").arg(store.lastError()));
-            out() << "Saved as prediction " << id << " in " << dbPath << '\n';
-        }
+        if (parser.isSet(QStringLiteral("save")))
+            out() << "Saved as prediction " << saveRecord(record) << " in " << dbPath << '\n';
         out().flush();
         QCoreApplication::quit();
     });

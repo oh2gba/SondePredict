@@ -1,0 +1,106 @@
+name: release
+
+# Builds the Windows installer/zip and the Linux AppImage. Runs on version tags (v5.0.0)
+# and can be started by hand; tagged runs attach the files to a GitHub release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: '6.11.3'
+
+jobs:
+  linux:
+    # The oldest supported Ubuntu, so the AppImage runs on older distributions too.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          modules: 'qtlocation qtpositioning'
+          aqtversion: '==3.3.*'
+          cache: true
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl-dev libegl-dev libxkbcommon-dev file
+
+      - name: Build AppImage
+        run: packaging/linux/build-appimage.sh "$QT_ROOT_DIR"
+
+      - name: Smoke test
+        run: |
+          APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+            SP_SCREENSHOT=$PWD/screenshot.png SP_SCREENSHOT_DELAY_MS=3000 \
+            build-appimage/Sonde_Predict-*-x86_64.AppImage --config $PWD/ci.ini --db $PWD/ci.sqlite
+          test -s screenshot.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: build-appimage/Sonde_Predict-*-x86_64.AppImage
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: 'qtlocation qtpositioning'
+          aqtversion: '==3.3.*'
+          cache: true
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSP_BUILD_TESTS=OFF
+          cmake --build build
+          cmake --install build --prefix deploy
+
+      - name: Deploy Qt
+        shell: pwsh
+        run: |
+          windeployqt --release --qmldir src/app/qml --no-translations deploy/bin/sondepredict.exe
+          # Only SQLite is used; the other database drivers need client libraries.
+          Get-ChildItem deploy/bin/sqldrivers -Exclude qsqlite.dll | Remove-Item
+          Copy-Item README.md deploy/bin/
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern '^\s*VERSION ([0-9.]+)$').Matches[0].Groups[1].Value
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=$version /DDeployDir="$PWD\deploy\bin" packaging\windows\sondepredict.iss
+          Compress-Archive -Path deploy\bin\* -DestinationPath dist\SondePredict-$version-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

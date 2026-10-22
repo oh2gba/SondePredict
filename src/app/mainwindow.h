@@ -1,5 +1,6 @@
 #pragma once
 
+#include "batch.h"
 #include "openmeteo.h"
 #include "predictionstore.h"
 #include "predictor.h"
@@ -51,10 +52,21 @@ private:
     void showDetails(const sp::PredictionRecord &record);
     void showOverview();
 
+    std::shared_ptr<sp::WindField> windField(); // the shared cache, renewed when stale
     void runPrediction();
     void onPredictionFinished(const sp::Prediction &prediction);
     void onPredictionFailed(const QString &error);
+    void startBatch(bool scheduled);
+    void onBatchJobFinished(const sp::BatchJob &job, const sp::Prediction &prediction);
+    void stopRunning();
+    bool isBusy() const;
     void setBusy(bool busy, const QString &message = {});
+    void updateBatchControls();
+    void updateScheduleTimer();
+
+    std::vector<sp::PredictionRecord> selectedRecords() const;
+    void openInGoogleEarth();
+    void exportSelected(bool gpx);
 
     void deleteSelected();
     void openSettings();
@@ -74,6 +86,13 @@ private:
     QNetworkAccessManager m_network;
     std::unique_ptr<sp::OpenMeteoClient> m_client;
     std::unique_ptr<sp::Predictor> m_predictor;
+    std::unique_ptr<sp::BatchRunner> m_batch;
+    bool m_busy = false; // a prediction or batch is running
+    bool m_batchScheduled = false;
+    int m_batchSaved = 0;
+    QStringList m_batchErrors;
+    QTimer m_scheduleTimer;
+    QDateTime m_nextScheduledRun;
     std::shared_ptr<sp::WindField> m_field;
     QDateTime m_fieldCreated;
 
@@ -102,4 +121,5 @@ private:
     QProgressBar *m_progress = nullptr;
     QLabel *m_clockLabel = nullptr;
     QTimer m_clock;
+    QList<QAction *> m_selectionActions; // enabled while predictions are selected
 };

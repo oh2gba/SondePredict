@@ -1,10 +1,12 @@
 # Build output
 /build*/
+/dist/
 CMakeUserPresets.json
 CMakeLists.txt.user*
 
-# Local toolchain (CMake, Ninja, Qt) managed by the developer
+# Local toolchain (CMake, Ninja, Qt, GL headers, linuxdeploy) managed by the developer
 /.toolchain/
+/packaging/linux/tools/
 aqtinstall.log
 
 # Original backup archive (kept locally, too large for git)

@@ -126,11 +126,33 @@ The windows live in an `sp_app` library so `tst_settingsdialog` can drive the di
 12 test suites pass. Google Earth, "Start a batch" and "Run scheduled batch tasks" are shown
 disabled until phase 4.
 
-### Phase 4 — batch runs and export
+### Phase 4 — batch runs and export ✅
 * Scheduler: days × hours rules, run on demand or at an interval (v3 "Start a batch").
 * KML export with the same per-point data as v3 (time, speed, heading, level, altitude),
   plus "open in Google Earth".
 * Packaging: Windows installer (windeployqt + Inno Setup or NSIS), Linux AppImage.
+
+Done:
+* `batch` (core): `planBatch` turns a schedule rule (days × UTC hours at a launch minute)
+  into launches; `BatchRunner` flies them in order through one wind cache and asks the first
+  prediction of each 12-hour span to fetch the hours of the later ones too, so a day's batch
+  downloads its winds once. Failed launches don't stop the batch.
+* App: Settings → Batch tab (launch site, your location, days, hours, minute, repeat interval),
+  "Start a batch", "Run scheduled batch tasks" (repeats while the app is open), Start turns
+  into Stop while running (as in v3), batch results appear in the tree as they arrive.
+* `trackexport` (core): KML with ascent/descent as `gx:Track` (3D, time slider, wind speed and
+  direction per point, like v3) and launch/burst/landing/home placemarks; GPX 1.1 with
+  landing/burst waypoints and the track for phone and GPS apps. Google Earth button (uses the
+  configured program or the system's KML handler), File → Export as KML / GPX.
+  `sp-cli` gained `--batch`, `--kml`, `--gpx` and `--export <ids>`.
+* `log.txt` next to the prediction database (Help → Open log file), as v3 had.
+* Packaging: app icon (`packaging/icons`), desktop entry and AppStream metadata, install rules,
+  Windows version resource. `packaging/linux/build-appimage.sh` builds a self-contained
+  AppImage with linuxdeploy (tested here: runs in a clean environment with map tiles, SQLite
+  and HTTPS). `packaging/windows/sondepredict.iss` + `.github/workflows/release.yml` build the
+  Windows installer and zip with windeployqt and Inno Setup, and the AppImage, on version tags.
+  The Windows build has not been run yet (no Windows machine here, no GitHub remote).
+* 14 test suites pass.
 
 ### Phase 5 — optional extras
 * Uncertainty: GFS ensemble (GEFS via Open-Meteo ensemble API) → landing-area ellipse.

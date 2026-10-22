@@ -37,7 +37,7 @@ private slots:
         s.network = {sp::ProxyMode::Manual, QStringLiteral("http://user:pw@proxy:3128")};
         s.wind = {QStringLiteral("https://example.org/v1/gfs"), QStringLiteral("key"), QStringLiteral("gfs_seamless"), 0.5};
         s.general = {QStringLiteral("C:\\Program Files\\Google Earth\\googleearth.exe"), false, false};
-        s.schedule = sp::ScheduleRule{QStringLiteral("Jokioinen"), QStringLiteral("Home, Espoo"), {0, 1, 2}, {11, 23}, 6};
+        s.schedule = sp::ScheduleRule{QStringLiteral("Jokioinen"), QStringLiteral("Home, Espoo"), {0, 1, 2}, {11, 23}, 15, 6, true};
         s.manualRun = {QStringLiteral("Jokioinen"), QStringLiteral("Sodankylä"), 23, 15};
 
         QString error;
@@ -66,6 +66,8 @@ private slots:
         QCOMPARE(r.schedule->hours, (QList<int>{11, 23}));
         QCOMPARE(r.schedule->homeName, QStringLiteral("Home, Espoo"));
         QCOMPARE(r.schedule->intervalHours, 6);
+        QCOMPARE(r.schedule->minute, 15);
+        QCOMPARE(r.schedule->autoRun, true);
         QCOMPARE(r.manualRun.homeName, QStringLiteral("Sodankylä"));
         QCOMPARE(r.manualRun.hour, 23);
         QCOMPARE(r.manualRun.minute, 15);

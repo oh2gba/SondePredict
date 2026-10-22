@@ -5,9 +5,15 @@ tell whether a launch is worth hunting. A rewrite of Sonde Predict v3 (2016–20
 C++20 / Qt 6 for Windows and Linux. See [PLAN.md](PLAN.md) for the roadmap; the original
 recovered source is in [recovered/](recovered/).
 
-Status: the desktop app (`sondepredict`) and a command-line predictor (`sp-cli`) work: single
-predictions with an OpenStreetMap view, saved locations and predictions, and import of v3
-settings. Batch runs and Google Earth export are next.
+Status: the desktop app (`sondepredict`) and a command-line predictor (`sp-cli`) work:
+predictions on an OpenStreetMap view, batch runs and a scheduler, export to Google Earth (KML)
+and GPS apps (GPX), saved locations and predictions, and import of v3 settings.
+
+## Packages
+
+* **Linux**: `packaging/linux/build-appimage.sh <qt-prefix>` builds a self-contained AppImage.
+* **Windows**: pushing a `v*` tag runs `.github/workflows/release.yml`, which builds an installer
+  and a zip (and the AppImage) and attaches them to a GitHub release.
 
 ## Build
 
@@ -46,7 +52,9 @@ Coming from v3? Import your old settings once, then use location names:
 ./build/src/cli/sp-cli --launch Jokioinen --home "Home, Espoo" --time 2026-10-23T11:15 --save
 ```
 
-`--locations` lists saved locations and `--list` the saved predictions. Settings live in
+`--locations` lists saved locations and `--list` the saved predictions. `--batch` runs the batch
+set up in the app, `--kml` / `--gpx` write the result for Google Earth or GPS apps, and
+`--export 3,5 --kml out.kml` exports stored predictions. Settings live in
 `~/.config/SondePredict/sondepredict.ini` (Windows: `%LOCALAPPDATA%\SondePredict`), predictions
 in `~/.local/share/SondePredict/predictions.sqlite`.
 

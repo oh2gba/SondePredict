@@ -1,5 +1,6 @@
 #include "geo.h"
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 

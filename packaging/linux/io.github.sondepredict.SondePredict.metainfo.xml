@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.sondepredict.SondePredict</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>Sonde Predict</name>
+  <summary>Predict radiosonde flight paths and landing points</summary>
+  <description>
+    <p>Sonde Predict calculates where a weather balloon's radiosonde will land, using GFS upper-air
+    winds, so radiosonde hunters can tell whether a launch is worth chasing. Predictions are shown
+    on a map and can be exported to Google Earth (KML) and GPS apps (GPX).</p>
+  </description>
+  <launchable type="desktop-id">sondepredict.desktop</launchable>
+  <categories>
+    <category>Science</category>
+    <category>HamRadio</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>

@@ -9,6 +9,8 @@
 #include <QTimeZone>
 #include <QVariantMap>
 
+#include <algorithm>
+
 namespace {
 
 QGeoCoordinate coordinate(sp::GeoPoint p)

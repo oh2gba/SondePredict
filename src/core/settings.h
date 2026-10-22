@@ -43,7 +43,9 @@ struct ScheduleRule {
     QString homeName;
     QList<int> days;       // 0 = today, 1 = tomorrow, ...
     QList<int> hours;      // UTC launch hours
+    int minute = 0;        // launch minute past each hour
     int intervalHours = 0; // 0 = only when started by hand
+    bool autoRun = false;  // run every intervalHours while the app is open
 };
 
 // Last choices in the main window's manual-run controls.

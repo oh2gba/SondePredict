@@ -18,6 +18,8 @@ sp_add_test(tst_trackerlog)
 sp_add_test(tst_settings)
 sp_add_test(tst_v3import)
 sp_add_test(tst_predictionstore)
+sp_add_test(tst_batch)
+sp_add_test(tst_trackexport)
 
 if(TARGET sp_app)
     sp_add_test(tst_settingsdialog)

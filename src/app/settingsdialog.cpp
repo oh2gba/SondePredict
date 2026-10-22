@@ -21,6 +21,7 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -72,6 +73,7 @@ SettingsDialog::SettingsDialog(const sp::AppSettings &settings, QWidget *parent)
     tabs->setObjectName(QStringLiteral("tabs"));
     tabs->addTab(buildLocationsTab(), tr("Locations"));
     tabs->addTab(buildBalloonTab(), tr("Balloon"));
+    tabs->addTab(buildBatchTab(), tr("Batch"));
     tabs->addTab(buildWindTab(), tr("Wind data && network"));
     tabs->addTab(buildGeneralTab(), tr("General"));
 
@@ -156,6 +158,7 @@ void SettingsDialog::refreshLocationList(const QString &select)
     }
     m_locationList->setCurrentRow(row);
     loadLocationForm(row);
+    refreshBatchLocations();
 }
 
 void SettingsDialog::loadLocationForm(int row)
@@ -223,6 +226,10 @@ bool SettingsDialog::saveLocation()
                 if (*ref == oldName)
                     *ref = name;
             }
+        }
+        for (QComboBox *combo : {m_batchSite, m_batchHome}) {
+            if (const int i = combo->findText(oldName); i >= 0)
+                combo->setItemText(i, name);
         }
         m_settings.locations[row] = location;
     } else {
@@ -418,6 +425,154 @@ QWidget *SettingsDialog::buildWindTab()
     return page;
 }
 
+// ---------------------------------------------------------------- Batch
+
+QWidget *SettingsDialog::buildBatchTab()
+{
+    m_batchSite = new QComboBox;
+    m_batchSite->setObjectName(QStringLiteral("batchSite"));
+    m_batchHome = new QComboBox;
+    m_batchHome->setObjectName(QStringLiteral("batchHome"));
+
+    m_batchDays = new QListWidget;
+    m_batchDays->setObjectName(QStringLiteral("batchDays"));
+    for (int day = 0; day <= 15; ++day) {
+        const QString label = day == 0 ? tr("Today") : day == 1 ? tr("Tomorrow") : tr("In %1 days").arg(day);
+        auto *item = new QListWidgetItem(label, m_batchDays);
+        item->setData(Qt::UserRole, day);
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+    }
+    m_batchHours = new QListWidget;
+    m_batchHours->setObjectName(QStringLiteral("batchHours"));
+    for (int hour = 0; hour < 24; ++hour) {
+        auto *item = new QListWidgetItem(QStringLiteral("%1").arg(hour, 2, 10, QChar(u'0')), m_batchHours);
+        item->setData(Qt::UserRole, hour);
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+    }
+    m_batchMinute = intSpin(0, 59, 5, tr(" min past the hour"));
+    m_batchMinute->setObjectName(QStringLiteral("batchMinute"));
+    m_batchInterval = intSpin(0, 168, 1, tr(" h"));
+    m_batchInterval->setObjectName(QStringLiteral("batchInterval"));
+    m_batchInterval->setSpecialValueText(tr("only when started by hand"));
+    m_batchSummary = new QLabel;
+    m_batchSummary->setWordWrap(true);
+
+    refreshBatchLocations();
+    if (const auto &rule = m_settings.schedule) {
+        m_batchSite->setCurrentText(rule->siteName);
+        m_batchHome->setCurrentIndex(std::max(0, m_batchHome->findText(rule->homeName)));
+        for (int i = 0; i < m_batchDays->count(); ++i)
+            m_batchDays->item(i)->setCheckState(rule->days.contains(i) ? Qt::Checked : Qt::Unchecked);
+        for (int i = 0; i < m_batchHours->count(); ++i)
+            m_batchHours->item(i)->setCheckState(rule->hours.contains(i) ? Qt::Checked : Qt::Unchecked);
+        m_batchMinute->setValue(rule->minute);
+        m_batchInterval->setValue(rule->intervalHours);
+    } else {
+        m_batchMinute->setValue(m_settings.manualRun.minute);
+    }
+
+    for (QComboBox *combo : {m_batchSite, m_batchHome})
+        connect(combo, &QComboBox::currentIndexChanged, this, &SettingsDialog::updateBatchSummary);
+    for (QListWidget *list : {m_batchDays, m_batchHours})
+        connect(list, &QListWidget::itemChanged, this, &SettingsDialog::updateBatchSummary);
+    for (QSpinBox *spin : {m_batchMinute, m_batchInterval})
+        connect(spin, &QSpinBox::valueChanged, this, &SettingsDialog::updateBatchSummary);
+
+    auto *top = new QFormLayout;
+    top->addRow(tr("Launch location"), m_batchSite);
+    top->addRow(tr("Your location"), m_batchHome);
+
+    auto *lists = new QHBoxLayout;
+    for (const auto &[label, list] : {std::pair{tr("Days"), m_batchDays}, std::pair{tr("Launch hours (UTC)"), m_batchHours}}) {
+        auto *column = new QVBoxLayout;
+        column->addWidget(new QLabel(label));
+        column->addWidget(list);
+        lists->addLayout(column);
+    }
+
+    auto *bottom = new QFormLayout;
+    bottom->addRow(tr("Launch time"), m_batchMinute);
+    bottom->addRow(tr("Repeat every"), m_batchInterval);
+
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    layout->addLayout(top);
+    layout->addLayout(lists, 1);
+    layout->addLayout(bottom);
+    layout->addWidget(m_batchSummary);
+    layout->addWidget(note(tr("Start a batch from the main window, or tick \"Run scheduled batch tasks\" there to repeat it "
+                              "while Sonde Predict is open. Launches on the same day share downloaded wind data.")));
+    updateBatchSummary();
+    return page;
+}
+
+void SettingsDialog::refreshBatchLocations()
+{
+    if (!m_batchSite)
+        return;
+    const QString site = m_batchSite->currentText();
+    const QString home = m_batchHome->currentText();
+    const QSignalBlocker siteBlocker(m_batchSite);
+    const QSignalBlocker homeBlocker(m_batchHome);
+    m_batchSite->clear();
+    m_batchHome->clear();
+    m_batchHome->addItem(tr("(none)"));
+    for (const sp::Location &l : m_settings.locations) {
+        m_batchSite->addItem(l.name);
+        m_batchHome->addItem(l.name);
+    }
+    m_batchSite->setCurrentIndex(std::max(0, m_batchSite->findText(site)));
+    m_batchHome->setCurrentIndex(std::max(0, m_batchHome->findText(home)));
+    updateBatchSummary();
+}
+
+std::optional<sp::ScheduleRule> SettingsDialog::scheduleFromForm() const
+{
+    if (m_batchSite->currentText().isEmpty())
+        return std::nullopt;
+    sp::ScheduleRule rule;
+    rule.siteName = m_batchSite->currentText();
+    rule.homeName = m_batchHome->currentIndex() > 0 ? m_batchHome->currentText() : QString();
+    for (int i = 0; i < m_batchDays->count(); ++i) {
+        if (m_batchDays->item(i)->checkState() == Qt::Checked)
+            rule.days << m_batchDays->item(i)->data(Qt::UserRole).toInt();
+    }
+    for (int i = 0; i < m_batchHours->count(); ++i) {
+        if (m_batchHours->item(i)->checkState() == Qt::Checked)
+            rule.hours << m_batchHours->item(i)->data(Qt::UserRole).toInt();
+    }
+    rule.minute = m_batchMinute->value();
+    rule.intervalHours = m_batchInterval->value();
+    rule.autoRun = m_settings.schedule && m_settings.schedule->autoRun && rule.intervalHours > 0;
+    return rule;
+}
+
+void SettingsDialog::updateBatchSummary()
+{
+    if (!m_batchSummary || !m_batchInterval)
+        return;
+    const auto rule = scheduleFromForm();
+    if (!rule) {
+        m_batchSummary->setText(tr("Add a location first."));
+        return;
+    }
+    const int count = int(rule->days.size() * rule->hours.size());
+    if (count == 0) {
+        m_batchSummary->setText(tr("Tick at least one day and one launch hour."));
+        return;
+    }
+    QStringList times;
+    for (int h : rule->hours)
+        times << QStringLiteral("%1:%2").arg(h, 2, 10, QChar(u'0')).arg(rule->minute, 2, 10, QChar(u'0'));
+    QString text = tr("%n prediction(s) per batch from %1, launches at %2 UTC.", nullptr, count)
+                       .arg(rule->siteName, times.join(QStringLiteral(", ")));
+    if (rule->intervalHours > 0)
+        text += u' ' + tr("Repeats every %n hour(s) when scheduled runs are on.", nullptr, rule->intervalHours);
+    m_batchSummary->setText(text);
+}
+
 // ---------------------------------------------------------------- General
 
 QWidget *SettingsDialog::buildGeneralTab()
@@ -477,5 +632,6 @@ void SettingsDialog::accept()
     m_settings.general.googleEarthPath = m_googleEarth->text().trimmed();
     m_settings.general.overwritePredictions = m_overwrite->isChecked();
     m_settings.general.useUtc = m_useUtc->isChecked();
+    m_settings.schedule = scheduleFromForm();
     QDialog::accept();
 }

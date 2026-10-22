@@ -16,7 +16,7 @@ Predictor::Predictor(WindSource *source, std::shared_ptr<WindField> field, QObje
 {
 }
 
-void Predictor::start(const LaunchParams &params)
+void Predictor::start(const LaunchParams &params, qint64 alsoCoverUntil)
 {
     ++m_generation;
     m_running = true;
@@ -35,7 +35,8 @@ void Predictor::start(const LaunchParams &params)
     // Flight window plus margin; later passes widen it if the flight needs more.
     const double duration = estimatedFlightTime(params.profile, params.siteAltitude.value_or(0.0));
     m_firstHour = params.launchTime / 3600;
-    m_lastHour = static_cast<qint64>(std::floor((params.launchTime + duration * 1.25 + 1800.0) / 3600.0)) + 1;
+    const qint64 lastLaunch = std::max(params.launchTime, alsoCoverUntil);
+    m_lastHour = static_cast<qint64>(std::floor((lastLaunch + duration * 1.25 + 1800.0) / 3600.0)) + 1;
 
     // A 4×4 block of nodes around the launch site covers the first part of the ascent.
     const NodeIndex cell = m_field->cellOf(params.site);
