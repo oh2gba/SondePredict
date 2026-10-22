@@ -59,6 +59,12 @@ const char *const kMigrations[] = {
 constexpr int kMigrationCount = static_cast<int>(std::size(kMigrations));
 static_assert(kMigrationCount == PredictionStore::kSchemaVersion);
 
+// Qt binds a null QString as SQL NULL; the text columns are NOT NULL, so bind "" instead.
+QString text(const QString &s)
+{
+    return s.isNull() ? QStringLiteral("") : s;
+}
+
 QVariant optionalValue(const std::optional<double> &v)
 {
     return v ? QVariant(*v) : QVariant(QMetaType(QMetaType::Double));
@@ -184,8 +190,8 @@ qint64 PredictionStore::save(const PredictionRecord &record, bool replaceExistin
     if (replaceExisting) {
         q.prepare(QStringLiteral("DELETE FROM predictions WHERE launch_time = ? AND site_name = ? AND home_name = ?"));
         q.addBindValue(p.launchTime);
-        q.addBindValue(record.siteName);
-        q.addBindValue(record.homeName);
+        q.addBindValue(text(record.siteName));
+        q.addBindValue(text(record.homeName));
         if (!q.exec()) {
             m_error = q.lastError().text();
             db.rollback();
@@ -210,15 +216,15 @@ qint64 PredictionStore::save(const PredictionRecord &record, bool replaceExistin
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(record.createdAt ? record.createdAt : QDateTime::currentSecsSinceEpoch());
     q.addBindValue(p.launchTime);
-    q.addBindValue(record.siteName);
+    q.addBindValue(text(record.siteName));
     q.addBindValue(p.site.lat);
     q.addBindValue(p.site.lon);
     q.addBindValue(optionalValue(p.siteAltitude));
-    q.addBindValue(record.homeName);
+    q.addBindValue(text(record.homeName));
     q.addBindValue(optionalValue(record.home ? std::optional(record.home->lat) : std::nullopt));
     q.addBindValue(optionalValue(record.home ? std::optional(record.home->lon) : std::nullopt));
     q.addBindValue(record.manual ? 1 : 0);
-    q.addBindValue(record.model);
+    q.addBindValue(text(record.model));
     q.addBindValue(p.profile.ascentRate);
     q.addBindValue(p.profile.burstAltitude);
     q.addBindValue(p.profile.descentModel == DescentModel::Legacy ? QStringLiteral("legacy") : QStringLiteral("density"));

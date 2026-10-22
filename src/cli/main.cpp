@@ -350,6 +350,9 @@ int main(int argc, char *argv[])
     QObject::connect(&client, &sp::OpenMeteoClient::rateLimited, [](int seconds) {
         QTextStream(stderr) << "Open-Meteo rate limit reached, retrying in " << seconds << " s..." << Qt::endl;
     });
+    QObject::connect(&client, &sp::OpenMeteoClient::paced, [](int seconds) {
+        QTextStream(stderr) << "Waiting " << seconds << " s to stay within Open-Meteo's free limit..." << Qt::endl;
+    });
 
     const auto saveRecord = [&](const sp::PredictionRecord &record) {
         const qint64 id = store.save(record, settings.general.overwritePredictions);

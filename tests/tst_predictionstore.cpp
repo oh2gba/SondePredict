@@ -150,6 +150,25 @@ private slots:
         QVERIFY(!store.load(a));
     }
 
+    void savesPredictionWithoutHome()
+    {
+        // A batch without "your location": null QStrings must not become SQL NULLs.
+        QTemporaryDir dir;
+        sp::PredictionStore store;
+        QVERIFY(store.open(dir.filePath(QStringLiteral("p.sqlite"))));
+        sp::PredictionRecord rec = makeRecord(kLaunch);
+        rec.homeName = QString();
+        rec.home.reset();
+        rec.model = QString();
+        const qint64 first = store.save(rec, true);
+        QVERIFY2(first > 0, qPrintable(store.lastError()));
+        QCOMPARE(store.load(first)->homeName, QString());
+        // ...and replacing an older prediction for the same launch works for them too.
+        const qint64 second = store.save(rec, true);
+        QVERIFY(second > 0);
+        QCOMPARE(store.list().size(), std::size_t(1));
+    }
+
     void rejectsUnlandedPrediction()
     {
         QTemporaryDir dir;

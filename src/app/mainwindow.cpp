@@ -342,6 +342,9 @@ void MainWindow::applySettings()
     connect(m_client.get(), &sp::OpenMeteoClient::rateLimited, this, [this](int seconds) {
         m_statusLabel->setText(tr("Open-Meteo rate limit reached; continuing in %1 s...").arg(seconds));
     });
+    connect(m_client.get(), &sp::OpenMeteoClient::paced, this, [this](int seconds) {
+        m_statusLabel->setText(tr("Spacing out requests to stay within Open-Meteo's free limit; continuing in %1 s…").arg(seconds));
+    });
     m_field.reset();
 
     const bool utc = m_settings.general.useUtc;
@@ -651,6 +654,7 @@ void MainWindow::onPredictionFinished(const sp::Prediction &prediction)
 
     const qint64 id = m_store.isOpen() ? m_store.save(record, m_settings.general.overwritePredictions) : 0;
     if (!id) {
+        qWarning().noquote() << "Prediction not saved:" << m_store.lastError();
         m_statusLabel->setText(tr("Prediction done, but it could not be saved: %1").arg(m_store.lastError()));
         m_map->model()->setPredictions({record});
         showDetails(record);
@@ -788,8 +792,9 @@ void MainWindow::startBatch(bool scheduled)
                            + (failed ? tr(", %1 failed").arg(failed) : QString()));
         qInfo() << "Batch done:" << succeeded << "succeeded," << failed << "failed";
         refreshTree();
-        if (failed && !m_batchScheduled) {
-            const QString text = tr("%1 failed:").arg(predictions(failed)) + u'\n' + m_batchErrors.mid(0, 5).join(u'\n');
+        if (!m_batchErrors.isEmpty() && !m_batchScheduled) {
+            const QString text = tr("%1 did not work:").arg(predictions(int(m_batchErrors.size()))) + u'\n'
+                               + m_batchErrors.mid(0, 5).join(u'\n');
             QTimer::singleShot(0, this, [this, text]() { QMessageBox::warning(this, tr("Batch"), text); });
         }
     });
@@ -812,7 +817,8 @@ void MainWindow::onBatchJobFinished(const sp::BatchJob &job, const sp::Predictio
         ++m_batchSaved;
         refreshTree(selectedIds().value(0)); // show results as they come in
     } else {
-        m_batchErrors << tr("could not save: %1").arg(m_store.lastError());
+        m_batchErrors << tr("%1: could not save: %2").arg(formatTime(double(job.params.launchTime)), m_store.lastError());
+        qWarning().noquote() << "Batch prediction not saved:" << m_batchErrors.last();
     }
 }
 

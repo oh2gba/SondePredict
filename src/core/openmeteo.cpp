@@ -16,6 +16,7 @@
 #include <QUrlQuery>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <numbers>
@@ -56,6 +57,16 @@ const std::vector<int> &pressureLevels()
                                          600, 550, 500, 450, 400, 350, 300, 250, 200, 150,
                                          100, 70, 50, 40, 30, 20, 15, 10};
     return levels;
+}
+
+int variableCount()
+{
+    return 2 + 3 * static_cast<int>(pressureLevels().size());
+}
+
+double requestWeight(int locations, int variables, double days)
+{
+    return locations * std::max(1.0, variables / 10.0) * std::max(1.0, days / 14.0);
 }
 
 QUrl buildUrl(const OpenMeteoOptions &options, const WindField &field,
@@ -156,6 +167,60 @@ QString parseInto(const QByteArray &json, const std::vector<NodeIndex> &nodes, W
 
 } // namespace openmeteo
 
+RateBudget::RateBudget(double perMinute, double perHour)
+    : m_perMinute(perMinute)
+    , m_perHour(perHour)
+{
+}
+
+bool RateBudget::fits(double calls, qint64 at) const
+{
+    double minute = 0, hour = 0;
+    for (const auto &[time, booked] : m_booked) {
+        if (time > at - 3600 * 1000)
+            hour += booked;
+        if (time > at - 60 * 1000)
+            minute += booked;
+    }
+    return (minute == 0 || minute + calls <= m_perMinute) && (hour == 0 || hour + calls <= m_perHour);
+}
+
+qint64 RateBudget::reserve(double calls, qint64 nowMs)
+{
+    std::erase_if(m_booked, [nowMs](const auto &b) { return b.first <= nowMs - 3600 * 1000; });
+
+    // Send no earlier than the last booking, then at the first moment the windows allow:
+    // either right away or when some earlier booking leaves the minute or hour window.
+    const qint64 base = m_booked.empty() ? nowMs : std::max(nowMs, m_booked.back().first);
+    std::vector<qint64> candidates{base};
+    for (const auto &b : m_booked) {
+        for (qint64 window : {qint64(60 * 1000), qint64(3600 * 1000)}) {
+            if (b.first + window > base)
+                candidates.push_back(b.first + window);
+        }
+    }
+    std::sort(candidates.begin(), candidates.end());
+    for (qint64 at : candidates) {
+        if (fits(calls, at)) {
+            m_booked.emplace_back(at, calls);
+            return at;
+        }
+    }
+    m_booked.emplace_back(candidates.back(), calls); // unreachable: the last candidate empties the windows
+    return candidates.back();
+}
+
+namespace {
+
+// One budget for the whole program, so it survives the client being recreated.
+RateBudget &freeApiBudget(const OpenMeteoOptions &options)
+{
+    static RateBudget budget(options.callsPerMinute, options.callsPerHour);
+    return budget;
+}
+
+} // namespace
+
 struct OpenMeteoClient::Batch {
     int pending = 0;
     QString error;
@@ -186,7 +251,23 @@ void OpenMeteoClient::fetch(const std::vector<NodeIndex> &nodes, qint64 firstHou
                                      nodes.begin() + static_cast<std::ptrdiff_t>(std::min(nodes.size(), start + chunkSize)));
         const QUrl url = openmeteo::buildUrl(m_options, *field, chunk, firstHour, lastHour);
         ++batch->pending;
-        send(url, std::move(chunk), field, batch, 0);
+
+        if (!m_options.apiKey.isEmpty() || m_options.callsPerMinute <= 0) {
+            send(url, std::move(chunk), field, batch, 0);
+            continue;
+        }
+        const double days = double(lastHour - firstHour + 1) / 24.0;
+        const double calls = openmeteo::requestWeight(int(chunk.size()), openmeteo::variableCount(), days);
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const qint64 delay = freeApiBudget(m_options).reserve(calls, now) - now;
+        if (delay <= 0) {
+            send(url, std::move(chunk), field, batch, 0);
+            continue;
+        }
+        emit paced(int((delay + 999) / 1000));
+        QTimer::singleShot(std::chrono::milliseconds(delay), this, [this, url, chunk = std::move(chunk), field, batch]() mutable {
+            send(url, std::move(chunk), field, batch, 0);
+        });
     }
 }
 

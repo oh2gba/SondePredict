@@ -301,11 +301,14 @@ grid points, levels and hours the wind is interpolated.
 
 * **Forecast range**: up to about 15 days ahead, and up to 7 days back in the main window.
   Forecasts more than 3–4 days ahead are rough; check again closer to the launch.
-* **Free quota**: Open-Meteo's free service is for non-commercial use and allows 600 calls a
-  minute and 10 000 a day, where fetching one grid point counts as about 8.6 calls. A prediction
-  typically needs 15–30 grid points, so you can make roughly 40–60 new predictions a day;
-  predictions that reuse downloaded winds cost nothing. When the per-minute limit is
-  reached, Sonde Predict says so in the status bar and continues by itself a minute later.
+* **Free quota**: Open-Meteo's free service needs no account or key; it recognises you by your
+  internet (IP) address and allows 600 calls a minute, 5 000 an hour and 10 000 a day for
+  non-commercial use. Fetching one grid point counts as about 8.6 calls and a new prediction
+  typically needs 15–20 grid points (about 140–190 calls), so you can make roughly 60 new
+  predictions a day; predictions that reuse downloaded winds cost nothing. Sonde Predict spaces
+  its requests out so it stays under the per-minute and per-hour limits: a big batch then simply
+  takes longer, and the status bar says when it is waiting. Other programs using Open-Meteo from
+  the same internet connection share the same limits.
 * **Accuracy**: compared with SondeHub's Tawhiri predictor for the same launches, Sonde Predict's
   landing points were 0.5–2 km apart on 55–90 km flights. Most of the real-world error comes from
   the balloon (burst altitude) and the forecast, not the calculation.
@@ -348,9 +351,13 @@ sp-cli --launch Jokioinen --time 2026-10-23T11:15 --compare received-flight.csv
 **"Could not reach Open-Meteo"** — Sonde Predict cannot connect to the wind data service. Check
 your internet connection, then the proxy under *Settings → Wind data & network*.
 
-**"Open-Meteo rate limit reached"** — you made many predictions in a short time. Sonde Predict
-waits a minute and continues by itself. If it happens often, use a coarser grid spacing. If the
-daily limit is reached, predictions fail until the next day.
+**"Spacing out requests…"** — normal during big batches: Sonde Predict waits so as not to go
+over Open-Meteo's free limits.
+
+**"Open-Meteo rate limit reached"** — the limit was reached anyway, for example because another
+program on the same internet connection uses Open-Meteo too. Sonde Predict waits a minute and
+continues by itself. If the daily limit is reached, predictions fail until the next day; a
+coarser grid spacing uses less of it.
 
 **"No wind data available for … (outside the forecast range?)"** — the launch is too far in the
 future or the past for the forecast.

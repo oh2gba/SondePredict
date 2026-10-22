@@ -76,6 +76,34 @@ private slots:
         QVERIFY(!field.sample(field.position(kNodes[0]), 30000.0, kFirstHour * 3600.0)->aboveTopLevel);
     }
 
+    void requestWeight()
+    {
+        QCOMPARE(sp::openmeteo::variableCount(), 86);
+        QVERIFY(qAbs(sp::openmeteo::requestWeight(16, 86, 0.25) - 16 * 8.6) < 1e-9);
+        QCOMPARE(sp::openmeteo::requestWeight(1, 5, 1.0), 1.0);   // at least one call per location
+        QCOMPARE(sp::openmeteo::requestWeight(1, 15, 28.0), 3.0); // Open-Meteo's own example × 2
+    }
+
+    void rateBudgetSpacesRequests()
+    {
+        sp::RateBudget budget(550, 4800);
+        QCOMPARE(budget.reserve(430, 0), qint64(0));
+        QCOMPARE(budget.reserve(100, 1000), qint64(1000));   // 530 ≤ 550: right away
+        QCOMPARE(budget.reserve(100, 2000), qint64(60000));  // would be 630: wait for the first to expire
+        QCOMPARE(budget.reserve(20, 3000), qint64(60000));   // keeps booking order
+        QCOMPARE(budget.reserve(900, 61000), qint64(120000)); // oversize: once the minute is empty
+    }
+
+    void rateBudgetHourLimit()
+    {
+        sp::RateBudget budget(550, 1000);
+        qint64 t = 0;
+        for (int i = 0; i < 5; ++i)
+            t = budget.reserve(200, t); // 5 × 200 = 1000 within the first minutes
+        QVERIFY(t < 3600 * 1000);
+        QCOMPARE(budget.reserve(200, t), qint64(3600 * 1000)); // the hour is full until the first expires
+    }
+
     void reportsApiError()
     {
         sp::WindField field(0.25);

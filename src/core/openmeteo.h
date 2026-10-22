@@ -8,6 +8,8 @@
 #include <QUrl>
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 class QNetworkAccessManager;
 
@@ -21,15 +23,44 @@ struct OpenMeteoOptions {
     QString baseUrl = QStringLiteral("https://api.open-meteo.com/v1/gfs");
     QString model = QStringLiteral("gfs_global");
     QString apiKey;
-    int maxNodesPerRequest = 100; // keeps the URL a sensible length
+    int maxNodesPerRequest = 50; // ≈ 430 calls, so one request always fits in a minute's budget
     int rateLimitRetries = 2;
     int rateLimitRetryDelayMs = 61000;
+    // Requests are spread out to stay under the free API's limits (600 calls a minute and
+    // 5,000 an hour), with some room for other programs. Not applied with an API key.
+    double callsPerMinute = 550;
+    double callsPerHour = 4800;
+};
+
+// Spreads requests over time so the calls in any minute and any hour stay within budget.
+class RateBudget {
+public:
+    RateBudget(double perMinute, double perHour);
+
+    // Books `calls` and returns when they may be sent (ms since the epoch): `nowMs`, or later
+    // once enough earlier calls have left the windows. Bookings keep their order. A single
+    // request bigger than a whole budget is let through once the windows are empty.
+    qint64 reserve(double calls, qint64 nowMs);
+
+private:
+    bool fits(double calls, qint64 at) const;
+
+    double m_perMinute;
+    double m_perHour;
+    std::vector<std::pair<qint64, double>> m_booked; // send time, calls; in time order
 };
 
 namespace openmeteo {
 
 // Pressure levels requested from GFS, hPa, surface to top (1000 → 10 hPa).
 const std::vector<int> &pressureLevels();
+
+// Variables requested per grid point (10 m wind plus speed, direction and height per level).
+int variableCount();
+
+// How many calls Open-Meteo counts for a request: locations × max(1, variables / 10) ×
+// max(1, days / 14), fractions included.
+double requestWeight(int locations, int variables, double days);
 
 QUrl buildUrl(const OpenMeteoOptions &options, const WindField &field,
               const std::vector<NodeIndex> &nodes, qint64 firstHour, qint64 lastHour);
@@ -55,6 +86,8 @@ public:
 signals:
     // Open-Meteo's rate limit was hit; the request is retried after `seconds`.
     void rateLimited(int seconds);
+    // A request waits `seconds` so as not to exceed the free API's limits.
+    void paced(int seconds);
 
 private:
     struct Batch;
