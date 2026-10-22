@@ -22,7 +22,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.3'
+          version: '6.10.3' # 6.11.x Windows packages are not installable by aqt yet
           arch: ${{ matrix.qt_arch }}
           modules: 'qtlocation qtpositioning'
           aqtversion: '==3.3.*'

@@ -1,28 +1,32 @@
 # Sonde Predict
 
-Predicts radiosonde flight paths and landing points from GFS upper-air winds, so you can
-tell whether a launch is worth hunting. A rewrite of Sonde Predict v3 (2016–2022) in
-C++20 / Qt 6 for Windows and Linux. See [PLAN.md](PLAN.md) for the roadmap; the original
-recovered source is in [recovered/](recovered/).
+Predicts where a radiosonde will land after its weather balloon bursts, from GFS upper-air
+winds, so you can tell at a glance whether a launch is worth hunting. Shows the track, burst,
+landing point and a 95% landing area on a map, with the distance and direction from your own
+location; batch predictions for several days, Google Earth (KML) and GPS/phone (GPX) export.
 
-Status: the desktop app (`sondepredict`) and a command-line predictor (`sp-cli`) work:
-predictions on an OpenStreetMap view, batch runs and a scheduler, export to Google Earth (KML)
-and GPS apps (GPX), saved locations and predictions, and import of v3 settings.
+![Sonde Predict](docs/manual/images/main-window.jpg)
 
-## User manual
+## Download
 
-[docs/manual/user-manual.md](docs/manual/user-manual.md) (also built into the app: Help → User
-manual, F1) and as a PDF: [docs/manual/user-manual.pdf](docs/manual/user-manual.pdf). After
-editing the manual, regenerate the PDF with `sondepredict --manual-pdf docs/manual/user-manual.pdf`
-(add `QT_QPA_PLATFORM=offscreen` on a machine without a display).
+| System | Download |
+|---|---|
+| **Windows** 10 / 11 (64-bit) | [Installer](https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-windows-x64-setup.exe) · [Zip (no install)](https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-windows-x64.zip) |
+| **Linux** (x86-64) | [AppImage](https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-x86_64.AppImage) — make it executable (`chmod +x`) and run it |
 
-## Packages
+These links always give the newest version; older ones are on the
+[releases page](https://github.com/oh2gba/SondePredict/releases). How to install, use and
+uninstall it is in the [user manual](docs/manual/user-manual.md)
+([PDF](docs/manual/user-manual.pdf)), which is also built into the app (Help → User manual, F1).
 
-* **Linux**: `packaging/linux/build-appimage.sh <qt-prefix>` builds a self-contained AppImage.
-* **Windows**: pushing a `v*` tag runs `.github/workflows/release.yml`, which builds an installer
-  and a zip (and the AppImage) and attaches them to a GitHub release.
+Sonde Predict 5 is a C++20 / Qt 6 rewrite of Sonde Predict v3 (2016–2022), which was
+Windows-only. Coming from v3? File → Import Sonde Predict v3 settings brings over your
+locations, balloon settings and batch schedule.
 
-## Build
+## Building from source
+
+The rest of this page is for developers. [PLAN.md](PLAN.md) describes the design and the
+roadmap; the recovered source of v3 is in [recovered/](recovered/).
 
 Needs CMake ≥ 3.21, Ninja, a C++20 compiler, Qt ≥ 6.5 (Core, Network, Sql, Widgets, Quick,
 QuickWidgets, Location, Positioning, Test) and the OpenGL development headers.
@@ -33,11 +37,20 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Then start the app:
+Then start the app (`sp-cli`, the command-line predictor, is in `build/src/cli`):
 
 ```bash
 ./build/src/app/sondepredict
 ```
+
+## Packages and releases
+
+* **Linux**: `packaging/linux/build-appimage.sh <qt-prefix>` builds a self-contained AppImage.
+* **Releases**: pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the Windows
+  installer and zip and the AppImage and publishes them as a GitHub release.
+* **Manual**: after editing `docs/manual/user-manual.md`, regenerate the PDF with
+  `sondepredict --manual-pdf docs/manual/user-manual.pdf` (add `QT_QPA_PLATFORM=offscreen` on a
+  machine without a display).
 
 ## Command line
 
@@ -67,3 +80,9 @@ in `~/.local/share/SondePredict/predictions.sqlite`.
 
 Wind data comes from the free [Open-Meteo](https://open-meteo.com) GFS API (non-commercial
 use; see the quota note in PLAN.md).
+
+## Licence
+
+Sonde Predict is free software under the [GNU General Public License v3.0](LICENSE).
+Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0); map data ©
+[OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.

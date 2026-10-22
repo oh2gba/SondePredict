@@ -31,21 +31,23 @@ same; what changed is listed in [Coming from Sonde Predict v3](#coming-from-sond
 
 ## Installing
 
-**Windows** (Windows 10 and 11, 64-bit): run `SondePredict-<version>-windows-x64-setup.exe`.
+Download Sonde Predict from <https://github.com/oh2gba/SondePredict/releases/latest>.
+
+**Windows** (Windows 10 and 11, 64-bit): run `SondePredict-windows-x64-setup.exe`.
 It installs for your user account only, unless you choose otherwise, and adds a Start menu entry.
 Uninstall it from *Settings → Apps* like any other program. There is also a zip file: unzip it
-anywhere and start `sondepredict.exe`, as with v3. Windows may warn that the installer comes
+anywhere and start `sondepredict.exe`, as with v3 (`SondePredict-windows-x64.zip`). Windows may warn that the installer comes
 from an unknown publisher; choose *More info → Run anyway*.
 
-**Linux** (most distributions from 2022 on): download `Sonde_Predict-<version>-x86_64.AppImage`,
-make it executable and start it:
+**Linux** (most distributions from 2022 on): download `SondePredict-x86_64.AppImage`, make it
+executable and start it:
 
 ```bash
-chmod +x Sonde_Predict-*-x86_64.AppImage
+chmod +x SondePredict-x86_64.AppImage
 ```
 
 ```bash
-./Sonde_Predict-*-x86_64.AppImage
+./SondePredict-x86_64.AppImage
 ```
 
 If it complains about FUSE, start it with `--appimage-extract-and-run` added, or install your
@@ -407,3 +409,5 @@ The settings file is plain text and can be backed up or copied to another comput
 * Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, map tiles by
   the OpenStreetMap Foundation.
 * Built with [Qt](https://www.qt.io/) (LGPL v3).
+* Sonde Predict is free software under the GNU General Public License v3.0; the source is at
+  <https://github.com/oh2gba/SondePredict>.

@@ -37,10 +37,15 @@ VERSION=$(sed -n 's/^ *VERSION \([0-9.]*\)$/\1/p' "$ROOT/CMakeLists.txt" | head 
 export VERSION
 # Show linuxdeploy a copy of the Qt plugin folder with SQLite as the only SQL driver; the
 # others (MySQL, PostgreSQL, ...) need client libraries we neither have nor want to bundle.
+# The position plugins (GPS sources such as NMEA, which needs QtSerialPort) are left out too:
+# Sonde Predict never reads a GPS.
 PLUGINS="$BUILD/qt-plugins"
 rm -rf "$PLUGINS" && mkdir -p "$PLUGINS/sqldrivers"
 for dir in "$QT_PREFIX"/plugins/*; do
-    [ "$(basename "$dir")" = sqldrivers ] || ln -s "$dir" "$PLUGINS/"
+    case "$(basename "$dir")" in
+        sqldrivers|position) ;;
+        *) ln -s "$dir" "$PLUGINS/" ;;
+    esac
 done
 ln -s "$QT_PREFIX/plugins/sqldrivers/libqsqlite.so" "$PLUGINS/sqldrivers/"
 printf '#!/bin/sh\n"%s" "$@" | sed "s|^QT_INSTALL_PLUGINS\\([^:]*\\):.*|QT_INSTALL_PLUGINS\\1:%s|"\n' \

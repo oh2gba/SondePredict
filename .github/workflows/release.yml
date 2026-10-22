@@ -11,7 +11,8 @@ permissions:
   contents: write
 
 env:
-  QT_VERSION: '6.11.3'
+  # 6.11.x Windows packages could not be installed by aqt (missing repository metadata).
+  QT_VERSION: '6.10.3'
 
 jobs:
   linux:
@@ -78,6 +79,7 @@ jobs:
           # Only SQLite is used; the other database drivers need client libraries.
           Get-ChildItem deploy/bin/sqldrivers -Exclude qsqlite.dll | Remove-Item
           Copy-Item README.md deploy/bin/
+          Copy-Item LICENSE deploy/bin/LICENSE.txt
 
       - name: Package
         shell: pwsh
@@ -101,6 +103,22 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # Fixed names, so .../releases/latest/download/<name> links in the README keep working.
+      - name: Stable file names
+        run: |
+          cd dist
+          mv SondePredict-*-windows-x64-setup.exe SondePredict-windows-x64-setup.exe
+          mv SondePredict-*-windows-x64.zip SondePredict-windows-x64.zip
+          mv Sonde_Predict-*-x86_64.AppImage SondePredict-x86_64.AppImage
+          ls -l
+
       - uses: softprops/action-gh-release@v2
         with:
+          name: Sonde Predict ${{ github.ref_name }}
+          body: |
+            **Windows 10/11:** `SondePredict-windows-x64-setup.exe` (installer) or `SondePredict-windows-x64.zip` (unzip and run `sondepredict.exe`).
+            **Linux:** `SondePredict-x86_64.AppImage` — `chmod +x` it and run it.
+
+            See the [user manual](https://github.com/oh2gba/SondePredict/blob/${{ github.ref_name }}/docs/manual/user-manual.md) for installing and using Sonde Predict.
           files: dist/*

@@ -931,6 +931,8 @@ void MainWindow::showAbout()
                           "<p>Predicts radiosonde flight paths and landing points from GFS upper-air winds.</p>"
                           "<p>A rewrite of Sonde Predict v3 (2016–2022).</p>"
                           "<p>Weather data by <a href=\"https://open-meteo.com/\">Open-Meteo.com</a> (CC BY 4.0), "
-                          "from NOAA GFS. Map data © <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors.</p>")
+                          "from NOAA GFS. Map data © <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors.</p>"
+                          "<p>Free software under the GNU General Public License v3.0. Source and downloads: "
+                          "<a href=\"https://github.com/oh2gba/SondePredict\">github.com/oh2gba/SondePredict</a></p>")
                            .arg(QApplication::applicationVersion()));
 }
