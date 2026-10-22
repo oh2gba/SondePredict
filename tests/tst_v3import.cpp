@@ -108,6 +108,7 @@ private slots:
         QCOMPARE(s.manualRun.siteName, QStringLiteral("Jokioinen"));
         QCOMPARE(s.manualRun.homeName, QStringLiteral("Home, Espoo"));
         QCOMPARE(s.manualRun.hour, 23);
+        QCOMPARE(s.manualRun.minute, 0);
     }
 
     void keepsExistingLocations()

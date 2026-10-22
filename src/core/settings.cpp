@@ -166,6 +166,7 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     out.manualRun.siteName = s.value(QStringLiteral("site")).toString();
     out.manualRun.homeName = s.value(QStringLiteral("home")).toString();
     out.manualRun.hour = s.value(QStringLiteral("hour"), out.manualRun.hour).toInt();
+    out.manualRun.minute = s.value(QStringLiteral("minute"), out.manualRun.minute).toInt();
     s.endGroup();
 
     return out;
@@ -232,6 +233,7 @@ bool AppSettings::save(const QString &path, QString *error) const
     s.setValue(QStringLiteral("site"), manualRun.siteName);
     s.setValue(QStringLiteral("home"), manualRun.homeName);
     s.setValue(QStringLiteral("hour"), manualRun.hour);
+    s.setValue(QStringLiteral("minute"), manualRun.minute);
     s.endGroup();
 
     s.sync();

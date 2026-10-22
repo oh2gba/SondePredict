@@ -38,7 +38,7 @@ private slots:
         s.wind = {QStringLiteral("https://example.org/v1/gfs"), QStringLiteral("key"), QStringLiteral("gfs_seamless"), 0.5};
         s.general = {QStringLiteral("C:\\Program Files\\Google Earth\\googleearth.exe"), false, false};
         s.schedule = sp::ScheduleRule{QStringLiteral("Jokioinen"), QStringLiteral("Home, Espoo"), {0, 1, 2}, {11, 23}, 6};
-        s.manualRun = {QStringLiteral("Jokioinen"), QStringLiteral("Sodankylä"), 23};
+        s.manualRun = {QStringLiteral("Jokioinen"), QStringLiteral("Sodankylä"), 23, 15};
 
         QString error;
         QVERIFY2(s.save(path, &error), qPrintable(error));
@@ -68,6 +68,7 @@ private slots:
         QCOMPARE(r.schedule->intervalHours, 6);
         QCOMPARE(r.manualRun.homeName, QStringLiteral("Sodankylä"));
         QCOMPARE(r.manualRun.hour, 23);
+        QCOMPARE(r.manualRun.minute, 15);
     }
 
     void readsHandEditedLists()

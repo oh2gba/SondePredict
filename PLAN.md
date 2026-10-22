@@ -106,12 +106,25 @@ a schedule location missing from `[locations]` is added from the schedule's own 
 Not imported: v3's `data.dat` (old predictions on old forecasts) and window geometry.
 Units (km/mi) moved to phase 5.
 
-### Phase 3 — desktop UI
+### Phase 3 — desktop UI ✅
 * Main window in the v3 layout: prediction tree by date on the left (bold when the landing is
   within the warning distance of "your location"), details on the right, Run button,
   launch site / your location / date / hour selectors.
 * Embedded map: track (ascent and descent coloured differently), burst, landing, your location.
 * Settings dialog, progress and status, background calculation.
+
+Done: `sondepredict` (Qt Widgets) with the v3 layout: predictions tree grouped by launch day,
+each entry showing the distance from your location (bold within that location's highlight
+distance; v3 used the launch site's value), Delete, and the run controls (launch location,
+your location, date, time in UTC or local, Start). The right side is an OpenStreetMap view
+(QML `Map` in a `QQuickWidget`, OSM tiles fetched directly with an identifying user agent and
+cached) above a details panel with clickable coordinates. Selecting several predictions or a
+whole day draws them together. Status bar with progress, rate-limit notices and a UTC clock.
+Settings dialog tabs: Locations, Balloon (with a live flight-time preview), Wind data & network,
+General. File → Import Sonde Predict v3 settings. Window layout is remembered.
+The windows live in an `sp_app` library so `tst_settingsdialog` can drive the dialog;
+12 test suites pass. Google Earth, "Start a batch" and "Run scheduled batch tasks" are shown
+disabled until phase 4.
 
 ### Phase 4 — batch runs and export
 * Scheduler: days × hours rules, run on demand or at an interval (v3 "Start a batch").
@@ -127,7 +140,11 @@ Units (km/mi) moved to phase 5.
 ## Building
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=.toolchain/Qt/6.11.3/gcc_64
+cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=".toolchain/Qt/6.11.3/gcc_64;.toolchain/sysroot/usr"
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+`.toolchain/sysroot` holds the OpenGL development headers (unpacked from Debian's `libgl-dev`,
+`libglx-dev`, `libopengl-dev`, `libegl-dev`) that Qt GUI needs; with those packages installed
+system-wide it can be left out.

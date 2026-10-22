@@ -5,17 +5,25 @@ tell whether a launch is worth hunting. A rewrite of Sonde Predict v3 (2016–20
 C++20 / Qt 6 for Windows and Linux. See [PLAN.md](PLAN.md) for the roadmap; the original
 recovered source is in [recovered/](recovered/).
 
-Status: the calculation core, settings, prediction storage and a command-line predictor
-work; the desktop UI is next.
+Status: the desktop app (`sondepredict`) and a command-line predictor (`sp-cli`) work: single
+predictions with an OpenStreetMap view, saved locations and predictions, and import of v3
+settings. Batch runs and Google Earth export are next.
 
 ## Build
 
-Needs CMake ≥ 3.21, Ninja, a C++20 compiler and Qt ≥ 6.5 (Core, Network, Sql, Test).
+Needs CMake ≥ 3.21, Ninja, a C++20 compiler, Qt ≥ 6.5 (Core, Network, Sql, Widgets, Quick,
+QuickWidgets, Location, Positioning, Test) and the OpenGL development headers.
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=.toolchain/Qt/6.11.3/gcc_64
+cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=".toolchain/Qt/6.11.3/gcc_64;.toolchain/sysroot/usr"
 cmake --build build
 ctest --test-dir build --output-on-failure
+```
+
+Then start the app:
+
+```bash
+./build/src/app/sondepredict
 ```
 
 ## Command line

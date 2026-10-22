@@ -297,8 +297,10 @@ V3ImportResult importV3Config(const QString &path, AppSettings &settings)
             settings.manualRun.siteName = site;
         if (const QString home = pick(QStringLiteral("your_loc")); !home.isEmpty())
             settings.manualRun.homeName = home;
-        if (const auto hour = toNumber(manual->value(QStringLiteral("time"))); hour && *hour >= 0 && *hour < 24)
+        if (const auto hour = toNumber(manual->value(QStringLiteral("time"))); hour && *hour >= 0 && *hour < 24) {
             settings.manualRun.hour = static_cast<int>(*hour);
+            settings.manualRun.minute = 0; // v3 only had whole hours
+        }
     }
 
     result.messages.prepend(QStringLiteral("Imported %1 location(s) from %2.").arg(result.locationsAdded).arg(path));

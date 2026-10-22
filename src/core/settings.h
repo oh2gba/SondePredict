@@ -51,6 +51,7 @@ struct ManualRunSettings {
     QString siteName;
     QString homeName;
     int hour = 11;
+    int minute = 15; // FMI and many others launch 45 min before the synoptic hour
 };
 
 struct AppSettings {

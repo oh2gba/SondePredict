@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(SP_BUILD_TESTS "Build the unit tests" ON)
+option(SP_BUILD_APP "Build the desktop application" ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Sql)
 qt_standard_project_setup()
@@ -22,6 +23,11 @@ endif()
 
 add_subdirectory(src/core)
 add_subdirectory(src/cli)
+
+if(SP_BUILD_APP)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets Quick QuickWidgets Location Positioning)
+    add_subdirectory(src/app)
+endif()
 
 if(SP_BUILD_TESTS)
     enable_testing()
