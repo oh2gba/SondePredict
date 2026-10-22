@@ -2,6 +2,8 @@
 
 #include "helpwindow.h"
 #include "mapwidget.h"
+#include "profilewidget.h"
+#include "scene3d.h"
 #include "network.h"
 #include "settingsdialog.h"
 #include "trackexport.h"
@@ -32,6 +34,7 @@
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
+#include <QTabWidget>
 #include <QTextBrowser>
 #include <QTimeEdit>
 #include <QTimeZone>
@@ -228,7 +231,16 @@ void MainWindow::buildUi()
     detailsLayout->addWidget(m_details);
 
     m_rightSplitter = new QSplitter(Qt::Vertical);
-    m_rightSplitter->addWidget(m_map);
+    // Map, 3D and altitude profile as tabs; the 3D view is built when first opened.
+    m_profile = new ProfileWidget;
+    m_views = new QTabWidget;
+    m_views->setObjectName(QStringLiteral("views"));
+    m_views->setDocumentMode(true);
+    m_views->addTab(m_map, tr("Map"));
+    m_views->addTab(new QWidget, tr("3D"));
+    m_views->addTab(m_profile, tr("Profile"));
+    connect(m_views, &QTabWidget::currentChanged, this, &MainWindow::updateCurrentView);
+    m_rightSplitter->addWidget(m_views);
     m_rightSplitter->addWidget(detailsBox);
     m_rightSplitter->setStretchFactor(0, 3);
     m_rightSplitter->setStretchFactor(1, 2);
@@ -299,6 +311,7 @@ void MainWindow::restoreWindowState()
         resize(1200, 800);
     m_mainSplitter->restoreState(state.value(QStringLiteral("mainSplitter")).toByteArray());
     m_rightSplitter->restoreState(state.value(QStringLiteral("rightSplitter")).toByteArray());
+    m_views->setCurrentIndex(state.value(QStringLiteral("view"), 0).toInt());
 }
 
 void MainWindow::saveWindowState() const
@@ -307,6 +320,7 @@ void MainWindow::saveWindowState() const
     state.setValue(QStringLiteral("geometry"), saveGeometry());
     state.setValue(QStringLiteral("mainSplitter"), m_mainSplitter->saveState());
     state.setValue(QStringLiteral("rightSplitter"), m_rightSplitter->saveState());
+    state.setValue(QStringLiteral("view"), m_views->currentIndex());
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -499,14 +513,43 @@ void MainWindow::onSelectionChanged()
         showOverview();
         return;
     }
-    m_map->model()->setPredictions(records);
+    showInViews(records);
     showDetails(records.front());
     if (records.size() > 1)
         m_statusLabel->setText(tr("%1 predictions shown on the map").arg(records.size()));
 }
 
+void MainWindow::showInViews(const std::vector<sp::PredictionRecord> &records)
+{
+    m_shown = records;
+    if (!records.empty())
+        m_map->model()->setPredictions(records);
+    m_profile->setPredictions(records);
+    if (m_scene3d && m_views->currentIndex() == 1)
+        m_scene3d->model()->setPredictions(records);
+}
+
+void MainWindow::updateCurrentView()
+{
+    if (m_views->currentIndex() != 1)
+        return;
+    if (!m_scene3d) {
+        m_scene3d = new Scene3DWidget;
+        QWidget *placeholder = m_views->widget(1);
+        m_views->blockSignals(true);
+        m_views->removeTab(1);
+        m_views->insertTab(1, m_scene3d, tr("3D"));
+        m_views->setCurrentIndex(1);
+        m_views->blockSignals(false);
+        placeholder->deleteLater();
+    }
+    // The ground image is only fetched while the 3D tab is open.
+    m_scene3d->model()->setPredictions(m_shown);
+}
+
 void MainWindow::showOverview()
 {
+    showInViews({});
     m_map->model()->setLocations(m_settings.location(m_siteCombo->currentText()),
                                  m_homeCombo->currentIndex() > 0 ? m_settings.location(m_homeCombo->currentText()) : nullptr);
     if (m_settings.locations.isEmpty()) {
@@ -656,7 +699,7 @@ void MainWindow::onPredictionFinished(const sp::Prediction &prediction)
     if (!id) {
         qWarning().noquote() << "Prediction not saved:" << m_store.lastError();
         m_statusLabel->setText(tr("Prediction done, but it could not be saved: %1").arg(m_store.lastError()));
-        m_map->model()->setPredictions({record});
+        showInViews({record});
         showDetails(record);
         return;
     }

@@ -18,16 +18,17 @@ same; what changed is listed in [Coming from Sonde Predict v3](#coming-from-sond
 3. [The main window](#the-main-window)
 4. [Making a prediction](#making-a-prediction)
 5. [Reading a prediction](#reading-a-prediction)
-6. [Batch predictions and the scheduler](#batch-predictions-and-the-scheduler)
-7. [Google Earth, KML and GPX](#google-earth-kml-and-gpx)
-8. [Settings](#settings)
-9. [Choosing the balloon settings](#choosing-the-balloon-settings)
-10. [Wind data and its limits](#wind-data-and-its-limits)
-11. [Command line](#command-line)
-12. [Troubleshooting](#troubleshooting)
-13. [Coming from Sonde Predict v3](#coming-from-sonde-predict-v3)
-14. [Where Sonde Predict keeps its files](#where-sonde-predict-keeps-its-files)
-15. [Credits](#credits)
+6. [The 3D view and the altitude profile](#the-3d-view-and-the-altitude-profile)
+7. [Batch predictions and the scheduler](#batch-predictions-and-the-scheduler)
+8. [Google Earth, KML and GPX](#google-earth-kml-and-gpx)
+9. [Settings](#settings)
+10. [Choosing the balloon settings](#choosing-the-balloon-settings)
+11. [Wind data and its limits](#wind-data-and-its-limits)
+12. [Command line](#command-line)
+13. [Troubleshooting](#troubleshooting)
+14. [Coming from Sonde Predict v3](#coming-from-sonde-predict-v3)
+15. [Where Sonde Predict keeps its files](#where-sonde-predict-keeps-its-files)
+16. [Credits](#credits)
 
 ## Installing
 
@@ -87,8 +88,9 @@ The window has the same layout as v3, with a map added.
     [Google Earth, KML and GPX](#google-earth-kml-and-gpx)).
 * **New prediction** (bottom left): the launch location, your location, the launch date and
   time, **Start**, **Start a batch** and **Run scheduled batch tasks**.
-* **Map** (top right): an OpenStreetMap map with the selected predictions. Drag to move, use the
-  mouse wheel or a pinch to zoom.
+* **Map**, **3D** and **Profile** (top right): the selected predictions on an OpenStreetMap map
+  (drag to move, mouse wheel or pinch to zoom), in 3D over the map, or as an altitude profile;
+  see [The 3D view and the altitude profile](#the-3d-view-and-the-altitude-profile).
 * **Details** (bottom right): the numbers for the selected prediction. Coordinates are links that
   open the spot on openstreetmap.org. You can select text and copy it with Ctrl+C.
 * **Status bar**: what Sonde Predict is doing, a progress bar while it works, and the current
@@ -150,6 +152,31 @@ under [Settings → Balloon](#balloon).
 
 GFS winds are available up to the 10 hPa level, about 31 km. If the burst altitude is higher,
 Sonde Predict keeps using the wind at the highest level and says so in the details.
+
+## The 3D view and the altitude profile
+
+The **3D** tab shows the selected predictions in three dimensions over the map, like the Google
+Earth view but inside Sonde Predict: the ascent (blue) and descent (red) with a see-through
+curtain down to the ground, the burst, the landing, the landing area and your location.
+
+![The 3D view](images/3d-view.jpg)
+
+* **Drag** to turn the view, **scroll** to zoom, **right-drag** (or drag with two fingers) to
+  move it.
+* **Height** stretches the heights. At true scale (×1) a 30 km high flight that travels 100 km
+  looks rather flat; ×2 is the default. **Reset view** goes back to the starting view, which
+  shows the flight from the side.
+* Select several predictions, or a whole day, to compare them; the first one is drawn bolder.
+* The map on the ground is downloaded the first time a place is shown in 3D and kept for later.
+  The ground is flat, at sea level; hills are not shown.
+
+The **Profile** tab shows the altitude against the minutes after launch: the steady climb, the
+burst, and the descent slowing down as the air gets thicker. The dashed line is the wind speed
+along the way (right-hand scale), which shows where the jet stream carried the balloon. Hold the
+mouse over the chart to read the time, altitude and wind at that moment. Other selected
+predictions are drawn in grey for comparison.
+
+![The altitude profile](images/profile.jpg)
 
 ## Batch predictions and the scheduler
 
@@ -364,6 +391,9 @@ future or the past for the forecast.
 
 **The map stays grey** — map tiles come from tile.openstreetmap.org and need the same internet
 access as the wind data. Tiles you have seen are cached and work offline.
+
+**The 3D tab stays empty or shows a message** — it needs working 3D graphics (OpenGL, Vulkan or
+Direct3D). Updating the graphics driver usually helps; the Map and Profile tabs work without it.
 
 **Linux: the window stays empty or grey** — the AppImage could not use your graphics driver
 through Wayland. Start it through X11 instead:

@@ -15,6 +15,9 @@
 #include <optional>
 
 class MapWidget;
+class ProfileWidget;
+class QTabWidget;
+class Scene3DWidget;
 class QCheckBox;
 class QComboBox;
 class QDateEdit;
@@ -51,6 +54,8 @@ private:
     QList<qint64> selectedIds() const;
     void showDetails(const sp::PredictionRecord &record);
     void showOverview();
+    void showInViews(const std::vector<sp::PredictionRecord> &records);
+    void updateCurrentView();
 
     std::shared_ptr<sp::WindField> windField(); // the shared cache, renewed when stale
     void runPrediction();
@@ -117,6 +122,10 @@ private:
     QCheckBox *m_schedulerCheck = nullptr;
     QTextBrowser *m_details = nullptr;
     MapWidget *m_map = nullptr;
+    QTabWidget *m_views = nullptr;          // Map / 3D / Profile
+    Scene3DWidget *m_scene3d = nullptr;     // created when its tab is first opened
+    ProfileWidget *m_profile = nullptr;
+    std::vector<sp::PredictionRecord> m_shown; // what the views show
     QSplitter *m_mainSplitter = nullptr;
     QSplitter *m_rightSplitter = nullptr;
     QLabel *m_statusLabel = nullptr;

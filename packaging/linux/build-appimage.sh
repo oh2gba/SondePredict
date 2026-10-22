@@ -33,7 +33,8 @@ cmake --build "$BUILD"
 rm -rf "$APPDIR"
 DESTDIR="$APPDIR" cmake --install "$BUILD" --prefix /usr
 
-VERSION=$(sed -n 's/^ *VERSION \([0-9.]*\)$/\1/p' "$ROOT/CMakeLists.txt" | head -1)
+# APPIMAGE_VERSION overrides the version in the file name (e.g. for test builds).
+VERSION=${APPIMAGE_VERSION:-$(sed -n 's/^ *VERSION \([0-9.]*\)$/\1/p' "$ROOT/CMakeLists.txt" | head -1)}
 export VERSION
 # Show linuxdeploy a copy of the Qt plugin folder with SQLite as the only SQL driver; the
 # others (MySQL, PostgreSQL, ...) need client libraries we neither have nor want to bundle.
@@ -56,7 +57,7 @@ export LD_LIBRARY_PATH="$QT_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export QML_SOURCES_PATHS="$ROOT/src/app/qml"
 # Qt modules whose plugins must be bundled even though nothing links them directly:
 # map tiles (location → geoservices), the database (sql → sqlite) and HTTPS (network → tls).
-export EXTRA_QT_MODULES="location;positioning;sql;network;svg"
+export EXTRA_QT_MODULES="location;positioning;sql;network;svg;quick3d"
 export EXTRA_PLATFORM_PLUGINS="libqwayland.so;libqoffscreen.so" # offscreen: headless smoke tests
 export PATH="$TOOLS:$PATH"
 
@@ -80,6 +81,9 @@ for plugin in platforms/libqxcb.so platforms/libqwayland.so \
               xcbglintegrations/libqxcb-egl-integration.so geoservices/libqtgeoservices_osm.so \
               sqldrivers/libqsqlite.so tls/libqopensslbackend.so; do
     [ -f "$APPDIR/usr/plugins/$plugin" ] || { echo "error: $plugin is missing from the AppImage" >&2; exit 1; }
+done
+for module in QtLocation QtQuick3D QtQuick3D/Helpers QtQuick/Controls; do
+    [ -d "$APPDIR/usr/qml/$module" ] || { echo "error: QML module $module is missing from the AppImage" >&2; exit 1; }
 done
 
 APPIMAGE_EXTRACT_AND_RUN=1 "${LINUXDEPLOY[@]}" --deploy-deps-only "$GRAPHICS" --output appimage

@@ -25,7 +25,7 @@ add_subdirectory(src/core)
 add_subdirectory(src/cli)
 
 if(SP_BUILD_APP)
-    find_package(Qt6 REQUIRED COMPONENTS Widgets Quick QuickWidgets Location Positioning)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets Quick QuickWidgets Location Positioning Quick3D)
     add_subdirectory(src/app)
 endif()
 

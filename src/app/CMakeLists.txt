@@ -1,13 +1,16 @@
 # The windows and dialogs live in a library so the tests can use them too.
 qt_add_library(sp_app STATIC
+    groundtexture.cpp groundtexture.h
     helpwindow.cpp helpwindow.h
     mainwindow.cpp mainwindow.h
     mapwidget.cpp mapwidget.h
+    profilewidget.cpp profilewidget.h
+    scene3d.cpp scene3d.h
     settingsdialog.cpp settingsdialog.h
 )
 qt_add_resources(sp_app "qml"
     PREFIX "/"
-    FILES qml/TrackMap.qml
+    FILES qml/TrackMap.qml qml/Track3D.qml
 )
 qt_add_resources(sp_app "icons"
     PREFIX "/icons"
@@ -20,7 +23,7 @@ qt_add_resources(sp_app "icons"
         ${PROJECT_SOURCE_DIR}/packaging/icons/sondepredict-16.png
 )
 # The user manual, shown by Help → User manual.
-file(GLOB SP_MANUAL_IMAGES ${PROJECT_SOURCE_DIR}/docs/manual/images/*)
+file(GLOB SP_MANUAL_IMAGES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/docs/manual/images/*)
 qt_add_resources(sp_app "manual"
     PREFIX "/manual"
     BASE ${PROJECT_SOURCE_DIR}/docs/manual
@@ -34,6 +37,7 @@ target_link_libraries(sp_app PUBLIC
     Qt6::QuickWidgets
     Qt6::Location
     Qt6::Positioning
+    Qt6::Quick3D
 )
 
 qt_add_executable(sondepredict WIN32 MACOSX_BUNDLE main.cpp)
