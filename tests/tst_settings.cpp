@@ -67,8 +67,8 @@ private slots:
         QVERIFY(!r.wind.averageMeps);
         QCOMPARE(r.wind.apiKey, QStringLiteral("key"));
         QCOMPARE(r.general.overwritePredictions, false);
-        QCOMPARE(r.general.checkForUpdates, false);
-        QCOMPARE(r.general.updateUrl, s.general.updateUrl);
+        QCOMPARE(r.general.updateCheck, false);
+        QCOMPARE(r.general.updateCheckUrl, s.general.updateCheckUrl);
         QVERIFY(r.schedule);
         QCOMPARE(r.schedule->days, (QList<int>{0, 1, 2}));
         QCOMPARE(r.schedule->sites.size(), 2);
@@ -136,15 +136,15 @@ private slots:
         const sp::AppSettings s = sp::AppSettings::load(path);
         QCOMPARE(s.general.overwritePredictions, false);
         QCOMPARE(s.general.useUtc, false);
-        QVERIFY(s.general.checkForUpdates); // on unless switched off
-        QVERIFY(s.general.updateUrl.isEmpty());
+        QVERIFY(s.general.updateCheck); // on unless switched off
+        QVERIFY(s.general.updateCheckUrl.isEmpty());
 
         QVERIFY(s.save(path));
         QVERIFY(f.open(QIODevice::ReadOnly));
         const QByteArray saved = f.readAll();
         QVERIFY(saved.contains("[options]"));
         QVERIFY(!saved.contains("%General"));
-        QVERIFY(!saved.contains("update_url")); // the default address is not written
+        QVERIFY(!saved.contains("update_check_url")); // the default address is not written
     }
 
     void findsLocationsByNameIgnoringCase()

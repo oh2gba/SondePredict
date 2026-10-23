@@ -82,9 +82,9 @@ private:
     void openSettings();
     void importV3Settings();
     void showAbout();
-    void checkForUpdates(bool manual = false); // nothing when switched off in Settings
-    void onUpdateChecked(const sp::UpdateCheck::Result &result);
-    QUrl updateUrl() const; // the setting, or UpdateCheck::defaultUrl
+    void runUpdateCheck(bool manual = false); // nothing when switched off in Settings
+    void onUpdateCheckFinished(const sp::UpdateCheck::Result &result);
+    QUrl updateCheckUrl() const; // the setting, or UpdateCheck::defaultUrl
 
     std::optional<QDateTime> launchDateTime() const;
     QString formatTime(double unixTime, bool withSeconds = false) const;
@@ -102,7 +102,7 @@ private:
     std::unique_ptr<sp::Predictor> m_predictor;
     std::unique_ptr<sp::BatchRunner> m_batch;
     sp::UpdateCheck m_updateCheck{&m_network};
-    QTimer m_updateTimer;
+    QTimer m_updateCheckTimer;
     bool m_manualUpdateCheck = false; // asked from the Help menu: the answer is shown
     bool m_busy = false; // a prediction or batch is running
     bool m_batchScheduled = false;

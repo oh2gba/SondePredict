@@ -139,12 +139,12 @@ MainWindow::MainWindow(QString configPath, QString dbPath, QWidget *parent)
     updateScheduleTimer();
 
     // Ask once soon after start, then every 24 hours while the program runs.
-    connect(&m_updateCheck, &sp::UpdateCheck::finished, this, &MainWindow::onUpdateChecked);
-    m_updateTimer.setTimerType(Qt::VeryCoarseTimer);
-    m_updateTimer.setInterval(24 * 60 * 60 * 1000);
-    connect(&m_updateTimer, &QTimer::timeout, this, [this]() { checkForUpdates(); });
-    m_updateTimer.start();
-    QTimer::singleShot(3000, this, [this]() { checkForUpdates(); });
+    connect(&m_updateCheck, &sp::UpdateCheck::finished, this, &MainWindow::onUpdateCheckFinished);
+    m_updateCheckTimer.setTimerType(Qt::VeryCoarseTimer);
+    m_updateCheckTimer.setInterval(24 * 60 * 60 * 1000);
+    connect(&m_updateCheckTimer, &QTimer::timeout, this, [this]() { runUpdateCheck(); });
+    m_updateCheckTimer.start();
+    QTimer::singleShot(3000, this, [this]() { runUpdateCheck(); });
     m_clockLabel->setText(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss 'UTC'")));
 }
 
@@ -321,7 +321,7 @@ void MainWindow::buildMenus()
         if (!QFileInfo::exists(log) || !QDesktopServices::openUrl(QUrl::fromLocalFile(log)))
             QMessageBox::information(this, tr("Log file"), tr("The log file is %1").arg(QDir::toNativeSeparators(log)));
     });
-    help->addAction(tr("Check for a &new version"), this, [this]() { checkForUpdates(true); });
+    help->addAction(tr("Run the &update check"), this, [this]() { runUpdateCheck(true); });
     help->addSeparator();
     help->addAction(tr("&About Sonde Predict"), this, &MainWindow::showAbout);
     help->addAction(tr("About &Qt"), qApp, &QApplication::aboutQt);
@@ -992,15 +992,15 @@ void MainWindow::openSettings()
     SettingsDialog dialog(m_settings, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
-    const bool checkedForUpdates = m_settings.general.checkForUpdates;
+    const bool updateCheckWasOn = m_settings.general.updateCheck;
     m_settings = dialog.settings();
     saveSettings();
     applySettings();
     refreshLocationCombos();
     refreshTree(selectedIds().value(0));
     updateScheduleTimer();
-    if (m_settings.general.checkForUpdates != checkedForUpdates)
-        checkForUpdates(); // switched on: ask now; switched off: the link goes
+    if (m_settings.general.updateCheck != updateCheckWasOn)
+        runUpdateCheck(); // switched on: ask now; switched off: the link goes
 }
 
 void MainWindow::importV3Settings()
@@ -1040,47 +1040,47 @@ void MainWindow::showAbout()
                            .arg(QApplication::applicationVersion()));
 }
 
-void MainWindow::checkForUpdates(bool manual)
+void MainWindow::runUpdateCheck(bool manual)
 {
-    if (!m_settings.general.checkForUpdates) {
+    if (!m_settings.general.updateCheck) {
         m_updateLabel->hide();
         if (manual)
-            QMessageBox::information(this, tr("New version"), tr("The check for a new version is switched off in Settings → General."));
+            QMessageBox::information(this, tr("Update check"), tr("The update check is switched off in Settings → General."));
         return;
     }
     m_manualUpdateCheck = m_manualUpdateCheck || manual;
     if (manual)
-        m_statusLabel->setText(tr("Checking for a new version..."));
-    m_updateCheck.run(updateUrl());
+        m_statusLabel->setText(tr("Running the update check..."));
+    m_updateCheck.run(updateCheckUrl());
 }
 
-QUrl MainWindow::updateUrl() const
+QUrl MainWindow::updateCheckUrl() const
 {
-    return QUrl(m_settings.general.updateUrl.isEmpty() ? QString::fromLatin1(sp::UpdateCheck::defaultUrl)
-                                                       : m_settings.general.updateUrl);
+    return QUrl(m_settings.general.updateCheckUrl.isEmpty() ? QString::fromLatin1(sp::UpdateCheck::defaultUrl)
+                                                       : m_settings.general.updateCheckUrl);
 }
 
-void MainWindow::onUpdateChecked(const sp::UpdateCheck::Result &r)
+void MainWindow::onUpdateCheckFinished(const sp::UpdateCheck::Result &r)
 {
     const QString current = QApplication::applicationVersion();
     const QString note = r.message.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(r.message);
     QString answer;
     if (!r.valid)
-        answer = tr("could not reach %1.").arg(updateUrl().host());
+        answer = tr("could not reach %1.").arg(updateCheckUrl().host());
     else if (r.newer)
         answer = tr("Sonde Predict %1 is available; this is %2.").arg(r.latest, current) + note;
     else
         answer = tr("Sonde Predict %1 is the current version.").arg(current) + note;
-    logActivity(tr("Version check: %1").arg(answer));
+    logActivity(tr("Update check: %1").arg(answer));
     if (m_manualUpdateCheck) {
         // asked for by hand: say what came back, also when there is nothing new
         m_manualUpdateCheck = false;
-        const QString sentence = r.valid ? answer : tr("Could not reach %1 for the version check.").arg(updateUrl().host());
+        const QString sentence = r.valid ? answer : tr("Update check: could not reach %1.").arg(updateCheckUrl().host());
         m_statusLabel->setText(sentence);
         QString text = sentence.toHtmlEscaped();
         if (r.newer && !r.url.isEmpty())
             text += QStringLiteral("<p><a href=\"%1\">%2</a></p>").arg(r.url.toHtmlEscaped(), tr("Download page"));
-        QTimer::singleShot(0, this, [this, text]() { QMessageBox::information(this, tr("New version"), text); });
+        QTimer::singleShot(0, this, [this, text]() { QMessageBox::information(this, tr("Update check"), text); });
     }
 
     // The status bar shows a newer version and any note from the project; nothing otherwise.
