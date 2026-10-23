@@ -55,6 +55,11 @@ public:
         ++fetchCount;
         nodesRequested += static_cast<int>(nodes.size());
         lastHourRequested = std::max(lastHourRequested, lastHour);
+        if (quotaWaitMs > 0 && maxWaitMs >= 0 && quotaWaitMs > maxWaitMs) {
+            ++refusedWaits;
+            QTimer::singleShot(0, [done]() { done({QStringLiteral("quota: would wait"), true}); });
+            return;
+        }
         if (fetchCount > failAfter) {
             QTimer::singleShot(0, [this, done]() { done({QStringLiteral("simulated network error"), failWithLimit}); });
             return;
@@ -69,11 +74,15 @@ public:
     }
 
     bool extraHoursAreFree() const override { return hoursAreFree; }
+    void setMaxWait(qint64 ms) override { maxWaitMs = ms; }
 
     int fetchCount = 0;
     int nodesRequested = 0;
     qint64 lastHourRequested = 0;
     bool hoursAreFree = true; // like Open-Meteo; false like MEPS
+    qint64 quotaWaitMs = 0;   // > 0: a quota would hold requests back this long
+    qint64 maxWaitMs = -1;    // as set by the predictor
+    int refusedWaits = 0;
     int failAfter = INT_MAX; // fetches after this many fail
     bool failWithLimit = false; // ...as "quota used up"
 

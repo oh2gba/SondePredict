@@ -43,7 +43,9 @@ public:
     // Books `calls` and returns when they may be sent (ms since the epoch): `nowMs`, or later
     // once enough earlier calls have left the windows. Bookings keep their order. A single
     // request bigger than a whole budget is let through once the windows are empty.
-    qint64 reserve(double calls, qint64 nowMs);
+    // With `maxDelayMs` >= 0, a booking that would wait longer is not made; the time it would
+    // have been sent is returned all the same.
+    qint64 reserve(double calls, qint64 nowMs, qint64 maxDelayMs = -1);
 
     // Where the program's shared log lives (in the user's cache folder).
     static QString defaultLogFile();
@@ -101,6 +103,7 @@ public:
     void fetch(const std::vector<NodeIndex> &nodes, qint64 firstHour, qint64 lastHour,
                std::shared_ptr<WindField> field, Done done) override;
     bool extraHoursAreFree() const override { return true; }
+    void setMaxWait(qint64 ms) override { m_maxWaitMs = ms; }
 
     // Total number of HTTP requests made, for diagnostics.
     int requestCount() const { return m_requestCount; }
@@ -119,6 +122,7 @@ private:
     QNetworkAccessManager *m_network;
     OpenMeteoOptions m_options;
     int m_requestCount = 0;
+    qint64 m_maxWaitMs = -1;
 };
 
 } // namespace sp

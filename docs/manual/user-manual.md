@@ -409,7 +409,8 @@ wind is interpolated.
   address and allows 600 calls a minute, 5 000 an hour and 10 000 a day for non-commercial use.
   Fetching one grid point counts as about 8.6 calls and a new prediction typically needs 15–20
   grid points (about 140–190 calls), so you can make roughly 60 new predictions a day (in the
-  MEPS area, MEPS alone takes over when the quota is used up); predictions that reuse downloaded
+  MEPS area, MEPS alone takes over when the quota is used up, or would hold a prediction back
+  for more than two minutes); predictions that reuse downloaded
   winds cost nothing. Sonde Predict spaces its requests
   out so it stays under the per-minute and per-hour limits: a big batch then simply takes longer,
   and the status bar says when it is waiting. Other programs using Open-Meteo from the same

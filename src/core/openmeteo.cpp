@@ -267,7 +267,7 @@ bool RateBudget::fits(double calls, qint64 at) const
     return (minute == 0 || minute + calls <= m_perMinute) && (hour == 0 || hour + calls <= m_perHour);
 }
 
-qint64 RateBudget::reserve(double calls, qint64 nowMs)
+qint64 RateBudget::reserve(double calls, qint64 nowMs, qint64 maxDelayMs)
 {
     // With a shared log: hold its lock, read what everyone booked, book, append.
     std::unique_ptr<QLockFile> lock;
@@ -298,6 +298,8 @@ qint64 RateBudget::reserve(double calls, qint64 nowMs)
             break;
         }
     }
+    if (maxDelayMs >= 0 && at - nowMs > maxDelayMs)
+        return at; // too long: not booked
     m_booked.emplace_back(at, calls);
     if (!m_logFile.isEmpty())
         appendLog(at, calls);
@@ -358,7 +360,20 @@ void OpenMeteoClient::fetch(const std::vector<NodeIndex> &nodes, qint64 firstHou
         const double days = double(lastHour - firstHour + 1) / 24.0;
         const double calls = openmeteo::requestWeight(int(chunk.size()), openmeteo::variableCount(), days);
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        const qint64 delay = freeApiBudget(m_options).reserve(calls, now) - now;
+        const qint64 delay = freeApiBudget(m_options).reserve(calls, now, m_maxWaitMs) - now;
+        if (m_maxWaitMs >= 0 && delay > m_maxWaitMs) {
+            // Another source can serve this prediction: better than a long wait.
+            log(QStringLiteral("Open-Meteo: the free limit would mean waiting %1; not waiting")
+                    .arg(openmeteo::describeWait(int((delay + 999) / 1000))));
+            if (batch->result.error.isEmpty()) {
+                batch->result.error = QStringLiteral("Open-Meteo's free calls for this hour are used up for another %1")
+                                          .arg(openmeteo::describeWait(int((delay + 999) / 1000)));
+                batch->result.limitReached = true;
+            }
+            if (--batch->pending == 0)
+                batch->done(batch->result);
+            continue;
+        }
         if (delay <= 0) {
             send(url, std::move(chunk), field, batch, 0);
             continue;

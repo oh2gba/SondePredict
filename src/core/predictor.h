@@ -81,6 +81,8 @@ private:
 
     const WindSampler &sampler() const;
     bool usable(const WindBackend &backend) const;
+    // Whether a later backend without `source` could serve this prediction.
+    bool fallbackWithout(const WindSource *source) const;
 
     std::vector<WindBackend> m_backends;
     std::size_t m_backend = 0;               // in use

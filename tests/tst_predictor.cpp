@@ -166,6 +166,34 @@ private slots:
         }
     }
 
+    void aLongQuotaWaitFallsBackInsteadOfWaiting()
+    {
+        sptest::FakeSource regional(sptest::uniform(10.0, 0.0));
+        sptest::FakeSource global(sptest::uniform(10.0, 0.0));
+        global.quotaWaitMs = 40 * 60 * 1000; // this hour's free calls used up
+        auto regionalField = std::make_shared<sp::WindField>(0.1);
+        auto globalField = std::make_shared<sp::WindField>(0.25);
+        bool regionalCovers = true;
+        sp::Predictor predictor({{{{&regional, regionalField}, {&global, globalField}}, QStringLiteral("meps+g"), QStringLiteral("MEPS + G"),
+                                  [&](const sp::LaunchParams &) { return regionalCovers; }},
+                                 {{{&regional, regionalField}}, QStringLiteral("meps"), QStringLiteral("MEPS"),
+                                  [&](const sp::LaunchParams &) { return regionalCovers; }},
+                                 {{{&global, globalField}}, QStringLiteral("g"), QStringLiteral("G"), {}}});
+        predictor.setSpread({});
+        QSignalSpy finished(&predictor, &sp::Predictor::finished);
+        predictor.start(launch());
+        QVERIFY(finished.wait(5000));
+        QCOMPARE(finished.takeFirst().at(0).value<sp::Prediction>().model, QStringLiteral("meps"));
+        QCOMPARE(global.refusedWaits, 1);
+
+        // Beyond the regional model nothing else can serve it: then the global one waits.
+        regionalCovers = false;
+        predictor.start(launch());
+        QVERIFY(finished.wait(5000));
+        QCOMPARE(finished.takeFirst().at(0).value<sp::Prediction>().model, QStringLiteral("g"));
+        QCOMPARE(global.maxWaitMs, qint64(-1));
+    }
+
     void inputErrorsDoNotFallBack()
     {
         sptest::FakeSource regional(sptest::uniform(10.0, 0.0));

@@ -105,6 +105,17 @@ private slots:
         QCOMPARE(budget.reserve(200, t), qint64(3600 * 1000)); // the hour is full until the first expires
     }
 
+    void rateBudgetDoesNotBookWhatWouldWaitTooLong()
+    {
+        sp::RateBudget budget(100.0, 1000.0);
+        const qint64 t0 = 1'000'000'000;
+        QCOMPARE(budget.reserve(1000.0, t0), t0);              // the hour is full now
+        const qint64 later = budget.reserve(10.0, t0, 120000);  // would wait an hour
+        QVERIFY(later - t0 > 120000);
+        // It was not booked: asking again without a limit gives the same time, not later.
+        QCOMPARE(budget.reserve(10.0, t0), later);
+    }
+
     void rateBudgetSharedThroughLog()
     {
         // Two programs (or a restarted one) see each other's calls through the log.

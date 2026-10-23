@@ -35,6 +35,11 @@ public:
     // location; not for MEPS, where each hour is a separate request).
     virtual bool extraHoursAreFree() const { return false; }
 
+    // The longest the source may hold a request back to stay within a quota before giving up
+    // with FetchResult::limitReached (ms; negative: as long as needed). The predictor sets it
+    // short when another source could serve the prediction instead.
+    virtual void setMaxWait(qint64 ms) { Q_UNUSED(ms); }
+
     // Receives a line for each notable step (requests, waits, retries) for an activity log.
     void setLogger(std::function<void(const QString &line)> logger) { m_logger = std::move(logger); }
 

@@ -53,6 +53,17 @@ void Predictor::start(const LaunchParams &params, qint64 alsoCoverUntil)
     begin();
 }
 
+bool Predictor::fallbackWithout(const WindSource *source) const
+{
+    for (std::size_t i = m_backend + 1; i < m_backends.size(); ++i) {
+        const WindBackend &b = m_backends[i];
+        const bool uses = std::any_of(b.parts.begin(), b.parts.end(), [source](const WindBackend::Part &p) { return p.source == source; });
+        if (!uses && usable(b))
+            return true;
+    }
+    return false;
+}
+
 bool Predictor::usable(const WindBackend &backend) const
 {
     if (backend.covers && !backend.covers(m_current.params))
@@ -173,6 +184,8 @@ void Predictor::fetch(const std::set<NodeKey> &keys)
             continue;
         m_current.nodesFetched += static_cast<int>(needed[layer].size());
         WindSource *source = m_parts[layer].source;
+        // Wait for a quota only when no other source could serve this prediction.
+        source->setMaxWait(fallbackWithout(source) ? 120000 : -1);
         source->fetch({needed[layer].begin(), needed[layer].end()}, hours[layer].first, hours[layer].second, m_parts[layer].field,
                       [self, generation, source](const FetchResult &result) {
             if (!self || generation != self->m_generation)
