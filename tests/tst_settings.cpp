@@ -39,7 +39,7 @@ private slots:
         s.profile.legacyDescentGain = 0.63;
         s.network = {sp::ProxyMode::Manual, QStringLiteral("http://user:pw@proxy:3128")};
         s.wind = {false, false, QStringLiteral("https://example.org/v1/gfs"), QStringLiteral("key"), QStringLiteral("gfs_seamless"), 0.5};
-        s.general = {false, false};
+        s.general = {false, false, false, QStringLiteral("http://localhost:8765/version.php")};
         s.schedule = sp::ScheduleRule{{{QStringLiteral("Jokioinen"), {QTime(23, 30), QTime(5, 30), QTime(11, 30)}},
                                        {QStringLiteral("Sodankylä"), {QTime(11, 15)}}},
                                       QStringLiteral("Home, Espoo"), {0, 1, 2}, 6, true};
@@ -67,6 +67,8 @@ private slots:
         QVERIFY(!r.wind.averageMeps);
         QCOMPARE(r.wind.apiKey, QStringLiteral("key"));
         QCOMPARE(r.general.overwritePredictions, false);
+        QCOMPARE(r.general.checkForUpdates, false);
+        QCOMPARE(r.general.updateUrl, s.general.updateUrl);
         QVERIFY(r.schedule);
         QCOMPARE(r.schedule->days, (QList<int>{0, 1, 2}));
         QCOMPARE(r.schedule->sites.size(), 2);
@@ -134,12 +136,15 @@ private slots:
         const sp::AppSettings s = sp::AppSettings::load(path);
         QCOMPARE(s.general.overwritePredictions, false);
         QCOMPARE(s.general.useUtc, false);
+        QVERIFY(s.general.checkForUpdates); // on unless switched off
+        QVERIFY(s.general.updateUrl.isEmpty());
 
         QVERIFY(s.save(path));
         QVERIFY(f.open(QIODevice::ReadOnly));
         const QByteArray saved = f.readAll();
         QVERIFY(saved.contains("[options]"));
         QVERIFY(!saved.contains("%General"));
+        QVERIFY(!saved.contains("update_url")); // the default address is not written
     }
 
     void findsLocationsByNameIgnoringCase()

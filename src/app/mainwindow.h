@@ -6,6 +6,7 @@
 #include "predictionstore.h"
 #include "predictor.h"
 #include "settings.h"
+#include "updatecheck.h"
 
 #include <QDateTime>
 #include <QMainWindow>
@@ -81,6 +82,9 @@ private:
     void openSettings();
     void importV3Settings();
     void showAbout();
+    void checkForUpdates(bool manual = false); // nothing when switched off in Settings
+    void onUpdateChecked(const sp::UpdateCheck::Result &result);
+    QUrl updateUrl() const; // the setting, or UpdateCheck::defaultUrl
 
     std::optional<QDateTime> launchDateTime() const;
     QString formatTime(double unixTime, bool withSeconds = false) const;
@@ -97,6 +101,9 @@ private:
     std::unique_ptr<sp::MepsClient> m_meps;
     std::unique_ptr<sp::Predictor> m_predictor;
     std::unique_ptr<sp::BatchRunner> m_batch;
+    sp::UpdateCheck m_updateCheck{&m_network};
+    QTimer m_updateTimer;
+    bool m_manualUpdateCheck = false; // asked from the Help menu: the answer is shown
     bool m_busy = false; // a prediction or batch is running
     bool m_batchScheduled = false;
     int m_batchSaved = 0;
@@ -137,6 +144,7 @@ private:
     QSplitter *m_rightSplitter = nullptr;
     QLabel *m_statusLabel = nullptr;
     QProgressBar *m_progress = nullptr;
+    QLabel *m_updateLabel = nullptr;        // "Version x.y.z available", a link; hidden otherwise
     QLabel *m_clockLabel = nullptr;
     QTimer m_clock;
     QList<QAction *> m_selectionActions; // enabled while predictions are selected

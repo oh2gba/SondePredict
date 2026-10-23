@@ -19,6 +19,9 @@ published before John has tested the build and said so.
 
 ## Elsewhere
 
+- **The update check's answer**: `static/sondepredict/version.json` in the oh2gba.eu project.
+  On each release set `version` there and deploy that site, once the release's files are on
+  GitHub.
 - **The project's GitHub Pages site**, <https://oh2gba.github.io/SondePredict/>: `docs/index.html`
   with `docs/site/` (style, icon, images made from app screenshots; `docs/.nojekyll`). GitHub
   Pages serves the `docs/` folder of `main`, so the manual and its PDF are on the site too.
@@ -35,7 +38,8 @@ published before John has tested the build and said so.
 1. John tests the AppImage (and the Windows build) built locally.
 2. Bump `VERSION`, update the metainfo release notes, commit.
 3. Push and tag; check that the GitHub Actions builds pass and the release has its files.
-4. Update the pages above that mention the version or new features.
+4. Update the pages above that mention the version or new features, and the update check's
+   answer last.
 5. First time only: turn on GitHub Pages (branch `main`, folder `/docs`) and make the project
    page easy to find from GitHub: `gh repo edit oh2gba/SondePredict --homepage
    https://oh2gba.github.io/SondePredict/` puts it in the About box at the top right of the

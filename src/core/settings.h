@@ -53,6 +53,8 @@ struct WindSettings {
 struct GeneralSettings {
     bool overwritePredictions = true; // replace an older prediction for the same launch
     bool useUtc = true;
+    bool checkForUpdates = true; // show when a newer version is out
+    QString updateUrl;           // empty = UpdateCheck::defaultUrl; for testing against another server
 };
 
 // One launch site of a batch and when it launches.

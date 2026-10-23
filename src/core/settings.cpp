@@ -235,6 +235,8 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     s.beginGroup(optionsGroup);
     out.general.overwritePredictions = readBool(s, QStringLiteral("overwrite_predictions"), out.general.overwritePredictions);
     out.general.useUtc = readBool(s, QStringLiteral("use_utc"), out.general.useUtc);
+    out.general.checkForUpdates = readBool(s, QStringLiteral("check_for_updates"), out.general.checkForUpdates);
+    out.general.updateUrl = s.value(QStringLiteral("update_url")).toString().trimmed();
     s.endGroup();
 
     if (s.childGroups().contains(QStringLiteral("schedule"))) {
@@ -345,6 +347,10 @@ bool AppSettings::save(const QString &path, QString *error) const
     s.beginGroup(QStringLiteral("options"));
     s.setValue(QStringLiteral("overwrite_predictions"), general.overwritePredictions);
     s.setValue(QStringLiteral("use_utc"), general.useUtc);
+    s.setValue(QStringLiteral("check_for_updates"), general.checkForUpdates);
+    // Written only when set by hand, so a later version can move the default address.
+    if (!general.updateUrl.isEmpty())
+        s.setValue(QStringLiteral("update_url"), general.updateUrl);
     s.endGroup();
 
     if (schedule) {

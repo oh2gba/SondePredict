@@ -114,6 +114,18 @@ private slots:
         QVERIFY(!dialog.settings().wind.useMeps);
     }
 
+    void turnsVersionCheckOff()
+    {
+        sp::AppSettings in = sample();
+        in.general.updateUrl = QStringLiteral("http://localhost:8765/version.php");
+        SettingsDialog dialog(in);
+        QVERIFY(child<QCheckBox>(dialog, "checkForUpdates")->isChecked());
+        child<QCheckBox>(dialog, "checkForUpdates")->setChecked(false);
+        dialog.accept();
+        QVERIFY(!dialog.settings().general.checkForUpdates);
+        QCOMPARE(dialog.settings().general.updateUrl, in.general.updateUrl); // not in the dialog, kept
+    }
+
     void addsLocation()
     {
         SettingsDialog dialog(sample());

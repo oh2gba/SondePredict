@@ -668,6 +668,7 @@ void SettingsDialog::restoreDefaults()
     m_apiUrl->clear();
     m_overwrite->setChecked(defaults.general.overwritePredictions);
     m_useUtc->setChecked(defaults.general.useUtc);
+    m_checkForUpdates->setChecked(defaults.general.checkForUpdates);
     if (m_presetStatus)
         m_presetStatus->setText(tr("Defaults restored; press OK to keep them."));
 }
@@ -1048,6 +1049,9 @@ QWidget *SettingsDialog::buildGeneralTab()
     m_overwrite->setChecked(m_settings.general.overwritePredictions);
     m_useUtc = new QCheckBox(tr("Show and enter times in UTC"));
     m_useUtc->setChecked(m_settings.general.useUtc);
+    m_checkForUpdates = new QCheckBox(tr("Check for a new version"));
+    m_checkForUpdates->setObjectName(QStringLiteral("checkForUpdates"));
+    m_checkForUpdates->setChecked(m_settings.general.checkForUpdates);
 
     auto *system = new QRadioButton(tr("Use the system proxy settings"));
     auto *none = new QRadioButton(tr("No proxy"));
@@ -1072,6 +1076,7 @@ QWidget *SettingsDialog::buildGeneralTab()
     manualRow->addWidget(manual);
     manualRow->addWidget(m_proxyUrl, 1);
     networkLayout->addLayout(manualRow);
+    networkLayout->addWidget(m_checkForUpdates);
 
     auto *predictions = new QGroupBox(tr("Predictions"));
     auto *predictionsLayout = new QVBoxLayout(predictions);
@@ -1126,6 +1131,7 @@ void SettingsDialog::accept()
     m_settings.network.proxyUrl = m_proxyUrl->text().trimmed();
     m_settings.general.overwritePredictions = m_overwrite->isChecked();
     m_settings.general.useUtc = m_useUtc->isChecked();
+    m_settings.general.checkForUpdates = m_checkForUpdates->isChecked();
     // A batch without sites is no batch; one without days is kept so its sites are not lost.
     m_settings.schedule = rule;
     QDialog::accept();
