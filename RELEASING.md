@@ -15,7 +15,9 @@ published before John has tested the build and said so.
 - `tools/validation/README.md`: results whenever the defaults or wind sources change.
 - `packaging/linux/io.github.sondepredict.SondePredict.metainfo.xml`: description and release notes.
 - `VERSION`, and the version in `CMakeLists.txt`, only when releasing.
-- `src/app/data/launch-sites.json`: refresh with `tools/sondehub_sites.py` before a release.
+- `src/app/data/launch-sites.json`: before a release, refresh the measured descents
+  (`tools/validation/fit_descents.py tools/descent-fits.json`, about an hour, downloads SondeHub
+  tracks) and then the station list (`tools/sondehub_sites.py`).
 
 ## Elsewhere
 
