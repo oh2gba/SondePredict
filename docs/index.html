@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonde Predict — where will the radiosonde land?</title>
+<meta name="description" content="Sonde Predict predicts where a weather balloon's radiosonde will land, so you can tell at a glance whether a launch is worth hunting. Free for Windows and Linux.">
+<meta property="og:title" content="Sonde Predict">
+<meta property="og:description" content="Where will the radiosonde land? Track, burst and landing area on a map, in 3D and as a profile, from MEPS and ECMWF winds, checked against real flights.">
+<meta property="og:image" content="https://oh2gba.github.io/SondePredict/site/img/main-3d.jpg">
+<link rel="icon" href="site/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site/style.css">
+</head>
+<body>
+
+<header class="hero">
+  <nav class="top">
+    <a class="brand" href="./"><img src="site/icon.svg" alt="" width="28" height="28"> Sonde Predict</a>
+    <span class="links">
+      <a href="#features">Features</a>
+      <a href="#accuracy">Accuracy</a>
+      <a href="#story">Story</a>
+      <a href="manual/user-manual.pdf">Manual</a>
+      <a href="https://github.com/oh2gba/SondePredict">GitHub</a>
+    </span>
+  </nav>
+  <div class="hero-text">
+    <p class="kicker">For radiosonde hunters</p>
+    <h1>Where will the radiosonde land?</h1>
+    <p class="lead">Sonde Predict flies the weather balloon through the forecast winds, second by second,
+      and shows you the track, the burst and where the sonde comes down — with the distance from
+      your door. So you know at a glance whether a launch is worth the drive.</p>
+    <div class="buttons">
+      <a class="button primary" href="https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-windows-x64-setup.exe">Download for Windows</a>
+      <a class="button primary" href="https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-x86_64.AppImage">Download for Linux</a>
+      <a class="button" href="https://github.com/oh2gba/SondePredict/releases">All downloads</a>
+    </div>
+    <p class="small">Free software (GPL v3). Windows 10/11 and Linux, 64-bit. No account, no adverts.</p>
+  </div>
+  <figure class="hero-shot">
+    <img src="site/img/main-3d.jpg" alt="Sonde Predict showing three predicted flights from Jokioinen in 3D over the map" width="1320" height="880">
+  </figure>
+</header>
+
+<main>
+
+<section id="features" class="features">
+  <h2>What it does</h2>
+  <div class="grid">
+    <article>
+      <h3>Map, 3D and profile</h3>
+      <p>The flight on an OpenStreetMap map, in 3D over the terrain, or as an altitude profile with
+        the winds it met. Predictions close to you are shown in bold.</p>
+    </article>
+    <article>
+      <h3>The best winds for the Nordic sky</h3>
+      <p>Inside the Nordic area it averages MET Norway's 2.5 km MEPS model, on its own 65 levels,
+        with ECMWF's global forecast — better than either alone. ECMWF covers the rest of the world.</p>
+    </article>
+    <article>
+      <h3>Tested against real flights</h3>
+      <p>Checked against FMI soundings and against 45 Jokioinen flights that hunters' receivers
+        followed to the ground. The balloon defaults come from hundreds of real flights.</p>
+    </article>
+    <article>
+      <h3>A landing area, not just a point</h3>
+      <p>Fifty varied flights show where the sonde will most likely come down, as an ellipse on the
+        map, so you can see how sure the prediction is.</p>
+    </article>
+    <article>
+      <h3>Every station you follow</h3>
+      <p>Batches cover several launch sites with their own launch times and their own balloons,
+        days ahead, and can repeat on their own while the program is open.</p>
+    </article>
+    <article>
+      <h3>Out in the field</h3>
+      <p>Export to GPS and phone apps as GPX, run it from the command line, and read what it is
+        doing line by line in the activity log.</p>
+    </article>
+  </div>
+</section>
+
+<section class="shots">
+  <figure>
+    <img src="site/img/main-2d.jpg" alt="A day of predictions on the map with landing areas" loading="lazy" width="1320" height="880">
+    <figcaption>A day of launches on the map, each with its landing area.</figcaption>
+  </figure>
+  <figure>
+    <img src="site/img/main-profile.jpg" alt="Altitude profiles and winds of three launches" loading="lazy" width="1320" height="880">
+    <figcaption>The profile of three launches: the same climb, very different winds — a 41 m/s jet stream on the first.</figcaption>
+  </figure>
+  <figure>
+    <img src="site/img/main-activity.jpg" alt="The activity log while a batch runs" loading="lazy" width="1320" height="880">
+    <figcaption>The activity log says which forecast it uses and what it downloads.</figcaption>
+  </figure>
+</section>
+
+<section id="accuracy" class="accuracy">
+  <h2>How close does it get?</h2>
+  <p>We predicted 45 real flights from Jokioinen (8–22 October 2026) with the winds available at
+    launch time and compared them with where SondeHub's receivers last heard each sonde.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Balloon settings</th><th>Typical landing error</th><th>Worst 10 %</th></tr></thead>
+    <tbody>
+      <tr><td>Before: generic values</td><td>13.7 km</td><td>27 km</td></tr>
+      <tr class="good"><td>Now: the station's recent flights, measured ascent and descent</td><td><strong>8.8 km</strong></td><td><strong>17 km</strong></td></tr>
+      <tr><td>If each balloon's burst were known in advance</td><td>6.5 km</td><td>12 km</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Balloons from one station vary (burst altitudes 31–36 km at Jokioinen), and the forecast
+    is never perfect, so the landing area matters as much as the point. The full comparison —
+    against soundings, by forecast lead time and per wind model — is
+    <a href="https://github.com/oh2gba/SondePredict/blob/main/tools/validation/README.md">in the source</a>.</p>
+  <div class="facts">
+    <div><span class="num">2–6 %</span><span>better winds from averaging MEPS and ECMWF, at every lead time</span></div>
+    <div><span class="num">−13 %</span><span>slower climb at 9–18 km, as real balloons do; now part of the flight model</span></div>
+    <div><span class="num">320</span><span>launch sites with typical balloon values from SondeHub, refreshed from their last 30 days</span></div>
+  </div>
+</section>
+
+<section id="story" class="story">
+  <h2>An old program, revived</h2>
+  <div class="cols">
+    <div>
+      <p>Sonde Predict started in 2016 as a small Python&nbsp;2 program for one question: is the
+        sonde from Jokioinen worth chasing today? It downloaded GFS GRIB files from NOAA, ran them
+        through <code>wgrib2</code>, and showed the flight in Google Earth. It worked for years,
+        until Python&nbsp;2, the data server and Google Earth all moved on, and only a zip file was
+        left.</p>
+      <p>In 2026 it was rebuilt from that zip: the same idea and the same workflow, now in C++ and
+        Qt, on Windows and Linux, with its own map and 3D view, better winds and a flight model
+        tuned on real flights.</p>
+    </div>
+    <ol class="timeline">
+      <li><span>2016</span> Sonde Predict, up to v3: Python 2.7, wxPython, GFS GRIB, Google Earth.</li>
+      <li><span>2022</span> Last build of v3.</li>
+      <li><span>2026</span> Sonde Predict 5: rewritten from the recovered source; map, 3D, profile, Windows and Linux.</li>
+      <li><span>2026</span> MEPS + ECMWF winds, validation against soundings and real flights, multi-site batches.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="get">
+  <h2>Get it</h2>
+  <div class="buttons">
+    <a class="button primary" href="https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-windows-x64-setup.exe">Windows installer</a>
+    <a class="button" href="https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-windows-x64.zip">Windows zip</a>
+    <a class="button primary" href="https://github.com/oh2gba/SondePredict/releases/latest/download/SondePredict-x86_64.AppImage">Linux AppImage</a>
+    <a class="button" href="manual/user-manual.pdf">User manual (PDF)</a>
+  </div>
+  <p>On Linux, make the AppImage executable (<code>chmod +x</code>) and run it. Coming from v3?
+    File → Import Sonde Predict v3 settings brings your locations, balloon and batch along.</p>
+</section>
+
+</main>
+
+<footer>
+  <p>Sonde Predict by <a href="https://oh2gba.eu/">OH2GBA</a> · free software under the
+    <a href="https://github.com/oh2gba/SondePredict/blob/main/LICENSE">GPL v3</a> ·
+    <a href="https://github.com/oh2gba/SondePredict">source on GitHub</a></p>
+  <p class="small">Weather data: MEPS by <a href="https://www.met.no/">MET Norway</a> (CC BY 4.0),
+    global models by <a href="https://open-meteo.com/">Open-Meteo.com</a> (CC BY 4.0). Flight data
+    and launch-site statistics from <a href="https://sondehub.org/">SondeHub</a>. Soundings by FMI.
+    Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.</p>
+</footer>
+
+</body>
+</html>
