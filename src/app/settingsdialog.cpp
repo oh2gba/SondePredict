@@ -577,11 +577,18 @@ QWidget *SettingsDialog::buildBalloonTab()
     spreadBox->setLayout(spreadRow);
     spreadBox->setEnabled(m_areaEnabled->isChecked());
     connect(m_areaEnabled, &QCheckBox::toggled, spreadBox, &QWidget::setEnabled);
+    m_areaWind = new QCheckBox(tr("Add forecast uncertainty (more the further ahead the launch is)"));
+    m_areaWind->setObjectName(QStringLiteral("areaWind"));
+    m_areaWind->setChecked(m_settings.spread.windUncertainty);
+    m_areaWind->setEnabled(m_areaEnabled->isChecked());
+    connect(m_areaEnabled, &QCheckBox::toggled, m_areaWind, &QWidget::setEnabled);
     auto *area = new QGroupBox(tr("Landing area"));
     auto *areaLayout = new QVBoxLayout(area);
     areaLayout->addWidget(m_areaEnabled);
     areaLayout->addWidget(spreadBox);
-    areaLayout->addWidget(note(tr("Re-flies each prediction with this much variation (one standard deviation) and "
+    areaLayout->addWidget(m_areaWind);
+    areaLayout->addWidget(note(tr("Re-flies each prediction with this much variation (one standard deviation), and with "
+                                  "small wind errors as large as the forecasts' real errors, and "
                                   "shows where 95% of those flights land. Uses no extra wind data quota.")));
     layout->addWidget(area);
     layout->addStretch();
@@ -643,6 +650,7 @@ void SettingsDialog::useSitePreset()
 void SettingsDialog::loadSpread(const sp::FlightSpread &s)
 {
     m_areaEnabled->setChecked(s.enabled);
+    m_areaWind->setChecked(s.windUncertainty);
     m_areaAscent->setValue(s.ascentRate);
     m_areaBurst->setValue(qRound(s.burstAltitude));
     m_areaDescent->setValue(qRound(s.descentRate * 100.0));
@@ -1107,6 +1115,7 @@ void SettingsDialog::accept()
     m_settings.spread.ascentRate = m_areaAscent->value();
     m_settings.spread.burstAltitude = m_areaBurst->value();
     m_settings.spread.descentRate = m_areaDescent->value() / 100.0;
+    m_settings.spread.windUncertainty = m_areaWind->isChecked();
     m_settings.wind.useMeps = m_useMeps->isChecked();
     m_settings.wind.averageMeps = m_averageMeps->isChecked();
     m_settings.wind.apiUrl = m_apiUrl->text().trimmed();

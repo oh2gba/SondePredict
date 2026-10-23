@@ -1,12 +1,14 @@
 # Sonde Predict
 
+**[➜ Project page: oh2gba.github.io/SondePredict](https://oh2gba.github.io/SondePredict/)** — downloads, screenshots, how accurate it is, and the user manual.
+
 Predicts where a radiosonde will land after its weather balloon bursts, from upper-air wind
 forecasts (MET Norway's MEPS in the Nordic area, ECMWF or another global model elsewhere), so you can tell at a glance whether a launch is worth hunting. Shows the track, burst,
 landing point and a 95% landing area on a map, with the distance and direction from your own
 location, in 3D over the map and as an altitude profile; batch predictions for several days and
 GPS/phone (GPX) export.
 
-![Sonde Predict](docs/manual/images/main-window.jpg)
+[![Sonde Predict](docs/manual/images/main-window.jpg)](https://oh2gba.github.io/SondePredict/)
 
 ## Download
 

@@ -140,16 +140,21 @@ The details panel shows:
 
 A single landing point looks more precise than it is. Real balloons climb a little faster or
 slower than planned, burst a kilometre or two higher or lower, and fall at slightly different
-speeds. Sonde Predict therefore flies each prediction about 50 more times through the same
-winds with those values varied, and draws the ellipse that contains 95% of the landings. The
+speeds, and the forecast winds are never quite right. Sonde Predict therefore flies each
+prediction about 50 more times with those values varied, each time also with a small, steady
+error added to the wind, and draws the ellipse that contains 95% of the landings. The
 details give its size and the direction of its long axis, for example *18.6 × 13.0 km, long
 axis 15°–195° (NNE–SSW)*.
 
-A long, thin area means the sonde travels along a steady wind and only its timing is uncertain:
-it will come down somewhere along that line. A round area means the wind changes direction with
-height. The area does not include errors in the wind forecast itself, so the true uncertainty is
-larger, especially for launches several days ahead. How much the balloon values are varied is set
-under [Settings → Balloon](#balloon).
+The wind error grows with how far ahead the launch is, as forecasts do, so an area for a launch
+two days ahead is clearly larger than one for a launch this afternoon. Its size was set from real
+flights: in tests against flights that SondeHub's receivers followed to the ground, about 95% of
+the sondes came down inside the 95% area.
+
+A long, thin area means the sonde travels along a steady wind and mainly its timing is
+uncertain: it will come down somewhere along that line. A rounder area means the wind changes
+direction with height or the forecast is less certain. How much the balloon values are varied is
+set under [Settings → Balloon](#balloon).
 
 ### When the balloon goes very high
 
@@ -283,7 +288,8 @@ window pointing at it.
     kilometre of altitude, exactly as in v3.
 * **Landing area**: *Estimate the landing area* switches the [landing area](#the-landing-area)
   on or off; the three values set how much the ascent rate, burst altitude and descent speed are
-  varied (one standard deviation).
+  varied (one standard deviation). *Add forecast uncertainty* (on by default) also varies the
+  wind, more for launches further ahead.
 * The line at the bottom shows how long a flight with these settings takes and how fast the
   sonde falls near the burst and near the ground, so you can see the effect of a change at
   once. **Restore defaults** puts back the defaults.

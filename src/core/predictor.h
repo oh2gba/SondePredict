@@ -55,6 +55,9 @@ public:
 
     // Variation used to estimate the landing area after each prediction (disable to skip).
     void setSpread(const FlightSpread &spread) { m_spread = spread; }
+    // A fixed forecast wind error for the landing area instead of the one from the lead time
+    // (validation; 0 = none).
+    void setWindSigmaOverride(std::optional<double> sigma) { m_windSigmaOverride = sigma; }
 
     // Whether the last failure was the wind source's hourly or daily limit.
     bool limitReached() const { return m_limitReached; }
@@ -99,6 +102,7 @@ private:
     bool m_areaStage = false; // fetching extra winds for the landing area
     bool m_limitReached = false;
     FlightSpread m_spread;
+    std::optional<double> m_windSigmaOverride;
 };
 
 } // namespace sp

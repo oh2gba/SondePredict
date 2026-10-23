@@ -104,6 +104,7 @@ private:
     QDoubleSpinBox *m_legacyRate = nullptr;
     QDoubleSpinBox *m_legacyGain = nullptr;
     QCheckBox *m_areaEnabled = nullptr;
+    QCheckBox *m_areaWind = nullptr;
     QDoubleSpinBox *m_areaAscent = nullptr;
     QSpinBox *m_areaBurst = nullptr;
     QSpinBox *m_areaDescent = nullptr;

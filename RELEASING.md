@@ -36,3 +36,9 @@ published before John has tested the build and said so.
 2. Bump `VERSION`, update the metainfo release notes, commit.
 3. Push and tag; check that the GitHub Actions builds pass and the release has its files.
 4. Update the pages above that mention the version or new features.
+5. First time only: turn on GitHub Pages (branch `main`, folder `/docs`) and make the project
+   page easy to find from GitHub: `gh repo edit oh2gba/SondePredict --homepage
+   https://oh2gba.github.io/SondePredict/` puts it in the About box at the top right of the
+   repository, next to the README's link at the very top; add topics too
+   (`gh repo edit oh2gba/SondePredict --add-topic radiosonde --add-topic weather-balloon
+   --add-topic ham-radio --add-topic sondehub --add-topic qt`).

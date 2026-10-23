@@ -206,6 +206,7 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     out.spread.burstAltitude = readDouble(s, QStringLiteral("burst_sigma"), out.spread.burstAltitude);
     out.spread.descentRate = readDouble(s, QStringLiteral("descent_sigma"), out.spread.descentRate);
     out.spread.samples = s.value(QStringLiteral("samples"), out.spread.samples).toInt();
+    out.spread.windUncertainty = readBool(s, QStringLiteral("wind_uncertainty"), out.spread.windUncertainty);
     s.endGroup();
 
     s.beginGroup(QStringLiteral("network"));
@@ -324,6 +325,7 @@ bool AppSettings::save(const QString &path, QString *error) const
     s.setValue(QStringLiteral("burst_sigma"), QString::number(spread.burstAltitude, 'g', 10));
     s.setValue(QStringLiteral("descent_sigma"), QString::number(spread.descentRate, 'g', 10));
     s.setValue(QStringLiteral("samples"), spread.samples);
+    s.setValue(QStringLiteral("wind_uncertainty"), spread.windUncertainty);
     s.endGroup();
 
     s.beginGroup(QStringLiteral("network"));

@@ -16,7 +16,17 @@ struct FlightSpread {
     double burstAltitude = 2500; // m
     double descentRate = 0.18;   // fraction of the descent speed (fitted descents: ± 18 %)
     int samples = 50;
+    // Forecast wind errors: each varied flight also gets a steady wind error of this size
+    // (m/s, one standard deviation per component). Set per prediction from how far ahead
+    // the launch is (forecastWindSigma) when windUncertainty is on.
+    bool windUncertainty = true;
+    double windSigma = 0.0;
 };
+
+// The wind error to add for a launch `leadHours` after the prediction is made (0 for launches
+// in the past, which use the forecast made closest to them). Calibrated so that about 95 % of
+// real landings fall inside the 95 % area (tools/validation/landings.py).
+double forecastWindSigma(double leadHours);
 
 // Where the sonde is likely to land, from re-flying the prediction with varied balloon
 // parameters through the same winds. Forecast wind errors come on top of this.
@@ -33,6 +43,8 @@ struct LandingArea {
     double minorAxis(double probability = 0.95) const;
     // Outline of that ellipse.
     std::vector<GeoPoint> outline(double probability = 0.95, int points = 72) const;
+    // Whether a point lies inside that ellipse.
+    bool contains(GeoPoint p, double probability = 0.95) const;
 };
 
 struct LandingAreaResult {

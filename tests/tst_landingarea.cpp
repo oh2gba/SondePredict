@@ -100,6 +100,51 @@ private slots:
         const auto r = sp::estimateLandingArea(params(), field, {});
         QVERIFY(!r.missing.empty());
     }
+
+    void windErrorWidensTheAreaAcrossTheWind()
+    {
+        // In a steady east wind with a fixed balloon, the area is a line along the wind; a
+        // forecast wind error spreads it across the wind too.
+        const sp::WindField field = eastWind();
+        sp::FlightSpread spread;
+        spread.ascentRate = 0.0;
+        spread.burstAltitude = 0.0;
+        spread.descentRate = 0.0;
+        spread.windSigma = 0.0;
+        const auto still = sp::estimateLandingArea(params(), field, spread).area;
+        QVERIFY(still);
+        QVERIFY(still->majorSigma < 50.0); // every flight lands on the same spot
+        spread.windSigma = 1.0;
+        const auto windy = sp::estimateLandingArea(params(), field, spread).area;
+        QVERIFY(windy);
+        // About 1 m/s × the flight time in each direction.
+        QVERIFY2(windy->minorSigma > 1500.0, qPrintable(QString::number(windy->minorSigma)));
+        QVERIFY(windy->contains(windy->centre));
+    }
+
+    void containsUsesTheEllipse()
+    {
+        sp::LandingArea a;
+        a.centre = {60.0, 25.0};
+        a.majorSigma = 4000.0; // 95 %: ±9.8 km along the axis
+        a.minorSigma = 1000.0; // ±2.4 km across
+        a.majorBearing = 90.0; // east–west
+        QVERIFY(a.contains(sp::offset(a.centre, 0.0, 9000.0)));
+        QVERIFY(!a.contains(sp::offset(a.centre, 0.0, 10500.0)));
+        QVERIFY(a.contains(sp::offset(a.centre, 2000.0, 0.0)));
+        QVERIFY(!a.contains(sp::offset(a.centre, 3000.0, 0.0)));
+    }
+
+    void windErrorGrowsWithLeadTime()
+    {
+        QCOMPARE(sp::forecastWindSigma(-5.0), sp::forecastWindSigma(0.0)); // past launches
+        double previous = 0.0;
+        for (double lead : {0.0, 6.0, 12.0, 24.0, 48.0, 96.0, 200.0}) {
+            const double s = sp::forecastWindSigma(lead);
+            QVERIFY(s > 0.0 && s >= previous);
+            previous = s;
+        }
+    }
 };
 
 QTEST_GUILESS_MAIN(TestLandingArea)

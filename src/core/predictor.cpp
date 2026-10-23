@@ -261,7 +261,10 @@ void Predictor::estimateAreaAndFinish()
 {
     if (m_spread.enabled) {
         emit progress(tr("Estimating the landing area"));
-        const LandingAreaResult area = estimateLandingArea(m_current.params, sampler(), m_spread);
+        FlightSpread spread = m_spread;
+        const double lead = double(m_current.params.launchTime - QDateTime::currentSecsSinceEpoch()) / 3600.0;
+        spread.windSigma = m_windSigmaOverride ? *m_windSigmaOverride : spread.windUncertainty ? forecastWindSigma(lead) : 0.0;
+        const LandingAreaResult area = estimateLandingArea(m_current.params, sampler(), spread);
         m_current.landingArea = area.area;
         if (area.area)
             emit activity(tr("Landing area from %1 varied flights: %2 × %3 km (95%)%4")

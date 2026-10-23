@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <numbers>
 #include <random>
 
@@ -66,6 +67,59 @@ std::vector<GeoPoint> LandingArea::outline(double probability, int points) const
     return out;
 }
 
+bool LandingArea::contains(GeoPoint p, double probability) const
+{
+    const Local frame(centre);
+    const double east = frame.east(p), north = frame.north(p);
+    const double theta = majorBearing * kDeg;
+    const double along = north * std::cos(theta) + east * std::sin(theta);
+    const double across = -north * std::sin(theta) + east * std::cos(theta);
+    const double k = sigmaScale(probability);
+    const double a = std::max(majorSigma * k, 1.0), b = std::max(minorSigma * k, 1.0);
+    return (along / a) * (along / a) + (across / b) * (across / b) <= 1.0;
+}
+
+namespace {
+
+// Another sampler's winds plus a steady error.
+class OffsetWind : public WindSampler {
+public:
+    OffsetWind(const WindSampler &base, double du, double dv) : m_base(base), m_du(du), m_dv(dv) {}
+    std::optional<WindSample> sample(GeoPoint p, double altitude, double unixTime, std::set<NodeKey> *missing) const override
+    {
+        std::optional<WindSample> s = m_base.sample(p, altitude, unixTime, missing);
+        if (s) {
+            s->u += m_du;
+            s->v += m_dv;
+        }
+        return s;
+    }
+
+private:
+    const WindSampler &m_base;
+    double m_du, m_dv;
+};
+
+} // namespace
+
+double forecastWindSigma(double leadHours)
+{
+    // Steady wind error (m/s) by lead time; the growth follows the position error of the
+    // forecasts at 10 km in tools/validation/issue.py (1.1 km 3 h ahead … 4.4 km 48 h ahead).
+    static constexpr double kLead[] = {0.0, 3.0, 6.0, 12.0, 24.0, 48.0, 96.0};
+    static constexpr double kGrowth[] = {1.0, 1.0, 1.18, 1.36, 2.7, 4.0, 6.0};
+    static constexpr double kBase = 0.6; // m/s for a launch within a few hours; calibrated
+    const double lead = std::max(0.0, leadHours);
+    constexpr int n = int(std::size(kLead));
+    if (lead >= kLead[n - 1])
+        return kBase * kGrowth[n - 1];
+    int i = 0;
+    while (lead > kLead[i + 1])
+        ++i;
+    const double f = (lead - kLead[i]) / (kLead[i + 1] - kLead[i]);
+    return kBase * (kGrowth[i] + f * (kGrowth[i + 1] - kGrowth[i]));
+}
+
 LandingAreaResult estimateLandingArea(const LaunchParams &params, const WindSampler &field, const FlightSpread &spread)
 {
     LandingAreaResult result;
@@ -89,7 +143,11 @@ LandingAreaResult estimateLandingArea(const LaunchParams &params, const WindSamp
         f.legacyDescentRate *= descentFactor;
         f.legacyDescentGain *= descentFactor;
 
-        const SimulationResult r = simulate(p, field);
+        // Drawn after the balloon, so areas without wind errors stay as they were.
+        const double du = spread.windSigma > 0.0 ? spread.windSigma * normal(rng) : 0.0;
+        const double dv = spread.windSigma > 0.0 ? spread.windSigma * normal(rng) : 0.0;
+        const OffsetWind wind(field, du, dv);
+        const SimulationResult r = simulate(p, spread.windSigma > 0.0 ? static_cast<const WindSampler &>(wind) : field);
         result.missing.insert(r.missing.begin(), r.missing.end());
         if (r.landing)
             area.landings.push_back(r.landing->position);

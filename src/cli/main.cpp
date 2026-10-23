@@ -268,10 +268,11 @@ int main(int argc, char *argv[])
         {QStringLiteral("save"), QStringLiteral("Store the prediction(s) in the prediction database.")},
         {QStringLiteral("batch"), QStringLiteral("Run the batch set up in the settings (days × launch hours).")},
         {QStringLiteral("no-area"), QStringLiteral("Skip the landing-area estimate.")},
+        {QStringLiteral("wind-sigma"), QStringLiteral("Validation: forecast wind error for the landing area, m/s (default: from the lead time)."), QStringLiteral("m/s")},
         {QStringLiteral("verbose"), QStringLiteral("Show what happens: wind model and run, downloads, waits, each pass.")},
         {QStringLiteral("export"), QStringLiteral("Export stored predictions (ids from --list) with --gpx and exit."), QStringLiteral("ids")},
-        {QStringLiteral("replay"), QStringLiteral("Validation: run the predictions listed in a CSV file (id,launch UTC,lat,lon,alt,ascent,burst,descent,exponent,shaped) "
-                                                  "sharing one wind cache, and print id,burst lat,lon,time,landing lat,lon,time per line."), QStringLiteral("file")},
+        {QStringLiteral("replay"), QStringLiteral("Validation: run the predictions listed in a CSV file (id,launch UTC,lat,lon,alt,ascent,burst,descent,exponent,shaped[,wind sigma]) "
+                                                  "sharing one wind cache, and print id,burst lat,lon,time,landing lat,lon,time,model[,area lat,lon,major σ,minor σ,bearing] per line."), QStringLiteral("file")},
         {QStringLiteral("list"), QStringLiteral("List stored predictions and exit.")},
         {QStringLiteral("locations"), QStringLiteral("List saved locations and exit.")},
         {QStringLiteral("import-v3"), QStringLiteral("Import a Sonde Predict v3 config.ini into the settings and exit."), QStringLiteral("config.ini")},
@@ -455,6 +456,7 @@ int main(int argc, char *argv[])
         struct Job {
             QString id;
             sp::LaunchParams params;
+            std::optional<double> windSigma; // optional 11th column
         };
         auto jobs = std::make_shared<std::vector<Job>>();
         while (!file.atEnd()) {
@@ -465,7 +467,8 @@ int main(int argc, char *argv[])
             job.id = f[0];
             job.params.launchTime = QDateTime::fromString(f[1], Qt::ISODate).toSecsSinceEpoch();
             job.params.site = {f[2].toDouble(), f[3].toDouble()};
-            job.params.siteAltitude = f[4].toDouble();
+            if (!f[4].trimmed().isEmpty())
+                job.params.siteAltitude = f[4].toDouble(); // empty: the ground under the site
             job.params.profile = profile;
             job.params.profile.ascentRate = f[5].toDouble();
             job.params.profile.burstAltitude = f[6].toDouble();
@@ -473,10 +476,15 @@ int main(int argc, char *argv[])
             job.params.profile.seaLevelDescentRate = f[7].toDouble();
             job.params.profile.descentExponent = f[8].toDouble();
             job.params.profile.shapedAscent = f[9].trimmed() == QLatin1String("1");
+            if (f.size() > 10 && !f[10].trimmed().isEmpty())
+                job.windSigma = f[10].toDouble();
             jobs->push_back(job);
         }
         auto *predictor = new sp::Predictor(backends, &app);
-        predictor->setSpread({false});
+        // The landing area too when it is asked for (validation of its size).
+        predictor->setSpread(spread);
+        if (parser.isSet(QStringLiteral("wind-sigma")))
+            predictor->setWindSigmaOverride(number(parser, QStringLiteral("wind-sigma")));
         if (verbose)
             QObject::connect(predictor, &sp::Predictor::activity, activity);
         auto index = std::make_shared<std::size_t>(0);
@@ -486,6 +494,8 @@ int main(int argc, char *argv[])
                 QCoreApplication::exit(0);
                 return;
             }
+            if (const auto sigma = (*jobs)[*index].windSigma)
+                predictor->setWindSigmaOverride(sigma);
             predictor->start((*jobs)[*index].params);
         };
         const auto point = [](const std::optional<sp::TrackPoint> &p) {
@@ -495,7 +505,12 @@ int main(int argc, char *argv[])
         };
         QObject::connect(predictor, &sp::Predictor::finished, &app, [=](const sp::Prediction &prediction) {
             out() << (*jobs)[*index].id << ',' << point(prediction.result.burst) << ',' << point(prediction.result.landing)
-                  << ',' << prediction.model << Qt::endl;
+                  << ',' << prediction.model;
+            if (const auto &a = prediction.landingArea)
+                out() << ',' << QString::number(a->centre.lat, 'f', 5) << ',' << QString::number(a->centre.lon, 'f', 5) << ','
+                      << QString::number(a->majorSigma, 'f', 0) << ',' << QString::number(a->minorSigma, 'f', 0) << ','
+                      << QString::number(a->majorBearing, 'f', 1);
+            out() << Qt::endl;
             ++*index;
             (*next)();
         });
@@ -538,6 +553,8 @@ int main(int argc, char *argv[])
     sp::FlightSpread siteSpread = settings.spreadFor(siteLocation);
     siteSpread.enabled = spread.enabled;
     predictor.setSpread(siteSpread);
+    if (parser.isSet(QStringLiteral("wind-sigma")))
+        predictor.setWindSigmaOverride(number(parser, QStringLiteral("wind-sigma")));
     if (verbose)
         QObject::connect(&predictor, &sp::Predictor::activity, activity);
     QObject::connect(&predictor, &sp::Predictor::progress, [verbose](const QString &message) {
