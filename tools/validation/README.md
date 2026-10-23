@@ -92,6 +92,46 @@ Real descents (`tracks.py`, 30 flights): fitting the time to fall from 25 to 10 
 2 km gives v0 11.7 m/s and k 0.33; the earlier 12 m/s and k 0.24 fell 107 s too slowly above
 10 km. Flight-to-flight spread about ± 18 %.
 
+**Other stations** (`stations.py`, 8–22 October 2026, MEPS winds from the run before launch;
+median landing error, km). *App*: the 30-day medians of ascent and burst and SondeHub's
+long-term descent; *fitted*: the same with the descent fitted to the station's own tracks;
+*real*: each flight's own ascent and burst.
+
+| Station | Flights | App | Fitted descent | Real balloon |
+|---|---|---|---|---|
+| Jokioinen | 46 | 9.3 | 9.6 | 7.0 |
+| Tallinn | 12 | 8.7 | **5.0** | 5.5 |
+| Stavanger | 16 | 6.2 | 8.0 | 3.2 |
+| Greifswald (parachute) | 18 | 22.4 | 22.2 | 20.7 |
+
+**SondeHub's descent averages can be far off.** `fit_descents.py` fitted the descent of 22
+stations around the Baltic and the North Sea to their recent tracks: Tallinn falls at 7.2 m/s, not
+the 13.7 listed (a parachute); Skriveri 7.7 (12.9 listed), Kaunas 9.7 (13.4), Wroclaw 8.7 (11.5).
+Parachute stations need a larger exponent (k 0.40–0.54) than free-falling sondes (0.32–0.38).
+The app ships these fits (`tools/descent-fits.json`, merged by `tools/sondehub_sites.py`); for
+other stations it takes k 0.45 below 7 m/s and 0.33 above. Where whole landings were checked,
+the values that matched them best win (Jokioinen 11.7 m/s, Stavanger 14.6 m/s).
+
+**The landing area** (`stations.py --sigmas`): varying only the balloon, the 95 % area held only
+28–83 % of the real landings. With a steady wind error per varied flight it holds them:
+
+| Inside the 95 % area | 0 | 0.5 m/s | 1 m/s | 1.5 m/s |
+|---|---|---|---|---|
+| Jokioinen | 43 % | 93 % | 100 % | 100 % |
+| Tallinn | 83 % | 92 % | 100 % | 100 % |
+| Stavanger | 56 % | 100 % | 100 % | 100 % |
+| Greifswald (parachute, ~4 m/s) | 28 % | 56 % | 83 % | 100 % |
+
+The app uses 0.5 m/s for forecasts a few hours old, growing with lead time as the forecast
+errors do (`issue.py`), and scaled up for slow descents by (11.7 / v0)^0.8 (Greifswald: about
+1.2 m/s), since parachutes spend an hour or more in the low-level winds.
+
+**MEPS + ECMWF on real landings** (`stations.py --compare-average`, 25 Jokioinen flights
+15–22 October 2026, fitted balloon values, winds as available at launch): MEPS alone missed by
+10.0 km (median; mean 10.6, p90 18.9), MEPS + ECMWF averaged by 8.5 km (mean 10.2, p90 21.2).
+The average is better on the typical flight, as on the soundings; a few flights in both runs fell
+back to ECMWF alone when MET Norway's server was busy.
+
 Caveats: 37 soundings from one station over twelve days of autumn weather. The differences
 between the models are small compared with their spread from day to day, so treat the order of
 close models as uncertain; the gain from averaging was consistent at every lead time.

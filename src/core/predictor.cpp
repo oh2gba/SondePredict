@@ -263,7 +263,11 @@ void Predictor::estimateAreaAndFinish()
         emit progress(tr("Estimating the landing area"));
         FlightSpread spread = m_spread;
         const double lead = double(m_current.params.launchTime - QDateTime::currentSecsSinceEpoch()) / 3600.0;
-        spread.windSigma = m_windSigmaOverride ? *m_windSigmaOverride : spread.windUncertainty ? forecastWindSigma(lead) : 0.0;
+        const FlightProfile &profile = m_current.params.profile;
+        const double nearGround = profile.descentModel == DescentModel::DensityScaled ? profile.seaLevelDescentRate
+                                                                                      : profile.descentRate(0.0);
+        spread.windSigma = m_windSigmaOverride ? *m_windSigmaOverride
+                         : spread.windUncertainty ? forecastWindSigma(lead, nearGround) : 0.0;
         const LandingAreaResult area = estimateLandingArea(m_current.params, sampler(), spread);
         m_current.landingArea = area.area;
         if (area.area)

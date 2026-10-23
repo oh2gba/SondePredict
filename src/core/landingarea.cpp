@@ -102,22 +102,27 @@ private:
 
 } // namespace
 
-double forecastWindSigma(double leadHours)
+double forecastWindSigma(double leadHours, double seaLevelDescentRate)
 {
     // Steady wind error (m/s) by lead time; the growth follows the position error of the
     // forecasts at 10 km in tools/validation/issue.py (1.1 km 3 h ahead … 4.4 km 48 h ahead).
     static constexpr double kLead[] = {0.0, 3.0, 6.0, 12.0, 24.0, 48.0, 96.0};
     static constexpr double kGrowth[] = {1.0, 1.0, 1.18, 1.36, 2.7, 4.0, 6.0};
-    static constexpr double kBase = 0.6; // m/s for a launch within a few hours; calibrated
+    // 0.5 m/s put 92–100 % of the landings inside the 95 % area at Jokioinen, Tallinn and
+    // Stavanger (forecasts a few hours old). Slow parachute descents spend an hour or more in
+    // the low-level winds, which forecasts get least right: Greifswald (about 4 m/s) needed
+    // 1.2 m/s, which the speed factor gives.
+    static constexpr double kBase = 0.5;
+    const double slow = std::max(1.0, std::pow(11.7 / std::max(seaLevelDescentRate, 1.0), 0.8));
     const double lead = std::max(0.0, leadHours);
     constexpr int n = int(std::size(kLead));
     if (lead >= kLead[n - 1])
-        return kBase * kGrowth[n - 1];
+        return kBase * slow * kGrowth[n - 1];
     int i = 0;
     while (lead > kLead[i + 1])
         ++i;
     const double f = (lead - kLead[i]) / (kLead[i + 1] - kLead[i]);
-    return kBase * (kGrowth[i] + f * (kGrowth[i + 1] - kGrowth[i]));
+    return kBase * slow * (kGrowth[i] + f * (kGrowth[i + 1] - kGrowth[i]));
 }
 
 LandingAreaResult estimateLandingArea(const LaunchParams &params, const WindSampler &field, const FlightSpread &spread)

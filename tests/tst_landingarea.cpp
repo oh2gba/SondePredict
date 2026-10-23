@@ -3,6 +3,8 @@
 
 #include <QTest>
 
+#include <cmath>
+
 namespace {
 
 constexpr qint64 kLaunch = 1792753200; // 2026-10-23 11:00 UTC
@@ -138,6 +140,9 @@ private slots:
     void windErrorGrowsWithLeadTime()
     {
         QCOMPARE(sp::forecastWindSigma(-5.0), sp::forecastWindSigma(0.0)); // past launches
+        QCOMPARE(sp::forecastWindSigma(0.0), 0.5);                           // calibrated: fast descent, a few hours ahead
+        QVERIFY(std::abs(sp::forecastWindSigma(0.0, 4.0) - 1.18) < 0.02);    // slow parachute (Greifswald)
+        QCOMPARE(sp::forecastWindSigma(0.0, 14.6), 0.5);                     // faster than Jokioinen: no smaller
         double previous = 0.0;
         for (double lead : {0.0, 6.0, 12.0, 24.0, 48.0, 96.0, 200.0}) {
             const double s = sp::forecastWindSigma(lead);

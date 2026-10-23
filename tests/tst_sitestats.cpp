@@ -33,7 +33,7 @@ private slots:
         QCOMPARE(p.burstAltitude, 29700.0);
         QCOMPARE(p.seaLevelDescentRate, 12.5);
         QCOMPARE(p.descentModel, sp::DescentModel::DensityScaled);
-        QCOMPARE(p.descentExponent, 0.3); // kept
+        QCOMPARE(p.descentExponent, 0.33); // no fit: the free-fall exponent for a fast descent
 
         const sp::FlightSpread spread = jok.applyTo(sp::FlightSpread{});
         QCOMPARE(spread.ascentRate, 0.41);
@@ -43,6 +43,26 @@ private slots:
         sp::FlightSpread custom;
         custom.burstAltitude = 1234;
         QCOMPARE(sites[1].applyTo(custom).burstAltitude, 1234.0);
+    }
+
+    void descentExponentFittedOrFromItsSpeed()
+    {
+        const auto sites = sp::parseLaunchSiteStats(R"json([
+            {"id":"a","name":"Fitted","lat":59.4,"lon":24.6,"ascent":5.2,"burst":23000,"descent":7.3,"descentK":0.46,
+             "descentTracks":12,"descentUntil":"2026-10-22"},
+            {"id":"b","name":"Parachute","lat":54.1,"lon":13.4,"ascent":5.0,"burst":32000,"descent":3.8},
+            {"id":"c","name":"Free fall","lat":60.8,"lon":23.5,"ascent":5.0,"burst":34000,"descent":12.5}])json");
+        QCOMPARE(sites.size(), std::size_t(3));
+        QVERIFY(sites[0].descentMeasured());
+        QCOMPARE(sites[0].exponent(), 0.46);
+        QCOMPARE(sites[0].descentUntil, QDate(2026, 10, 22));
+        QVERIFY(sites[0].descentSource().contains(QStringLiteral("12 descents")));
+        QCOMPARE(sites[1].exponent(), 0.45); // slow: a parachute
+        QCOMPARE(sites[2].exponent(), 0.33); // fast: falling free
+        QVERIFY(!sites[2].descentMeasured());
+        QCOMPARE(sites[1].applyTo(sp::FlightProfile{}).descentExponent, 0.45);
+        QCOMPARE(sp::siteBalloon(sites[0], std::nullopt).descentRate, 7.3);
+        QCOMPARE(sp::siteBalloon(sites[0], std::nullopt).descentExponent, 0.46);
     }
 
     void sortsByDistance()

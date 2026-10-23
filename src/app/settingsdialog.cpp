@@ -349,10 +349,10 @@ void SettingsDialog::fillLocationBalloonFromSondeHub()
             return;
         }
         showLocationBalloon(sp::siteBalloon(site, recent, base));
-        m_locBalloonStatus->setText(tr("%1, %2 flights from %3 to %4. Press Save to keep these values.")
+        m_locBalloonStatus->setText(tr("%1: ascent and burst from %2 flights, %3 to %4; descent %5. Press Save to keep these values.")
                                         .arg(site.name).arg(recent->flights)
                                         .arg(QLocale().toString(recent->first, QLocale::ShortFormat),
-                                             QLocale().toString(recent->last, QLocale::ShortFormat)));
+                                             QLocale().toString(recent->last, QLocale::ShortFormat), site.descentSource()));
     });
 }
 
@@ -521,9 +521,11 @@ QWidget *SettingsDialog::buildBalloonTab()
         // The name only: Use takes the recent flights; the long-term averages are in the tooltip.
         m_sitePreset->addItem(s.name, s.id);
         m_sitePreset->setItemData(m_sitePreset->count() - 1,
-                                  tr("Sonde Predict's copy of SondeHub's long-term averages: ascent %1 m/s, burst %2 km, descent %3 m/s%4")
+                                  tr("Sonde Predict's copy of SondeHub's long-term averages: ascent %1 m/s, burst %2 km%4.\n"
+                                     "Descent %3 m/s at sea level, k %5: %6.")
                                       .arg(s.ascentRate, 0, 'f', 1).arg(s.burstAltitude / 1000.0, 0, 'f', 1).arg(s.descentRate, 0, 'f', 1)
-                                      .arg(s.flights > 0 ? tr(" (%1 flights)").arg(s.flights) : QString()),
+                                      .arg(s.flights > 0 ? tr(" (%1 flights)").arg(s.flights) : QString())
+                                      .arg(s.exponent(), 0, 'f', 2).arg(s.descentSource()),
                                   Qt::ToolTipRole);
     }
     auto *useSite = new QPushButton(tr("&Use"));
@@ -639,11 +641,12 @@ void SettingsDialog::useSitePreset()
         m_burst->setValue(int(std::lround(recent->burstAltitude / 100.0)) * 100);
         m_areaAscent->setValue(recent->ascentSd);
         m_areaBurst->setValue(int(std::lround(recent->burstSd / 50.0)) * 50);
-        m_presetStatus->setText(tr("%1, %2 flights from %3 to %4: ascent %5 ± %6 m/s, burst %7 ± %8 km.")
+        m_presetStatus->setText(tr("%1, %2 flights from %3 to %4: ascent %5 ± %6 m/s, burst %7 ± %8 km; descent %9.")
                                     .arg(site.name).arg(recent->flights)
                                     .arg(QLocale().toString(recent->first, QLocale::ShortFormat), QLocale().toString(recent->last, QLocale::ShortFormat))
                                     .arg(recent->ascentRate, 0, 'f', 1).arg(recent->ascentSd, 0, 'f', 1)
-                                    .arg(recent->burstAltitude / 1000.0, 0, 'f', 1).arg(recent->burstSd / 1000.0, 0, 'f', 1));
+                                    .arg(recent->burstAltitude / 1000.0, 0, 'f', 1).arg(recent->burstSd / 1000.0, 0, 'f', 1)
+                                    .arg(site.descentSource()));
     });
 }
 

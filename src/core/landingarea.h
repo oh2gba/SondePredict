@@ -24,9 +24,11 @@ struct FlightSpread {
 };
 
 // The wind error to add for a launch `leadHours` after the prediction is made (0 for launches
-// in the past, which use the forecast made closest to them). Calibrated so that about 95 % of
-// real landings fall inside the 95 % area (tools/validation/landings.py).
-double forecastWindSigma(double leadHours);
+// in the past, which use the forecast made closest to them), for a sonde falling at
+// `seaLevelDescentRate` near the ground. Calibrated on SondeHub flights from Jokioinen, Tallinn,
+// Stavanger and Greifswald so that about 95 % of real landings fall inside the 95 % area
+// (tools/validation/stations.py).
+double forecastWindSigma(double leadHours, double seaLevelDescentRate = 11.7);
 
 // Where the sonde is likely to land, from re-flying the prediction with varied balloon
 // parameters through the same winds. Forecast wind errors come on top of this.

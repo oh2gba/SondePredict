@@ -7,6 +7,7 @@
 #include "sondehub.h"
 
 #include <QByteArray>
+#include <QDate>
 #include <QList>
 #include <QString>
 #include <QTime>
@@ -25,7 +26,14 @@ struct LaunchSiteStats {
     double ascentRate = 0.0;    // m/s
     double burstAltitude = 0.0; // m
     double descentRate = 0.0;   // m/s at sea level
-    std::optional<double> descentExponent; // k, when fitted to the site's descents
+    std::optional<double> descentExponent; // k, when fitted to the site's recent descents
+    int descentTracks = 0;                 // descents behind that fit (0: SondeHub's average)
+    QDate descentUntil;                    // last day of the flights fitted
+
+    bool descentMeasured() const { return descentExponent.has_value(); }
+    // The exponent to use: the fitted one, or for a site without a fit one that suits its
+    // speed: parachutes (slow) slow down more near the ground than sondes falling free.
+    double exponent() const;
     // One standard deviation, when SondeHub has enough flights.
     std::optional<double> ascentSd;
     std::optional<double> burstSd;
@@ -35,6 +43,9 @@ struct LaunchSiteStats {
 
     // Typical launch times: 30 minutes before each synoptic time.
     QList<QTime> launchTimes() const;
+
+    // "measured on 12 descents up to 22.10.2026" or "SondeHub's long-term average", for people.
+    QString descentSource() const;
 
     // `profile` with this site's ascent, burst and (density-scaled) descent rate.
     FlightProfile applyTo(FlightProfile profile) const;
@@ -53,7 +64,8 @@ const LaunchSiteStats *nearestSite(const std::vector<LaunchSiteStats> &sites, Ge
 
 // Balloon values for a launch location from a site's statistics: the recent flights' ascent
 // and burst when known (they change as stations change balloons), otherwise the long-term
-// averages; the descent from the statistics; the exponent from `base` unless fitted.
+// averages; the descent measured on recent tracks where Sonde Predict has a fit, otherwise
+// SondeHub's average with an exponent that suits its speed (LaunchSiteStats::exponent()).
 SiteBalloon siteBalloon(const LaunchSiteStats &site, const std::optional<RecentFlightStats> &recent,
                         const SiteBalloon &base = {});
 

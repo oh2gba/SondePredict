@@ -16,8 +16,7 @@ FlightProfile LaunchSiteStats::applyTo(FlightProfile profile) const
     profile.burstAltitude = burstAltitude;
     profile.descentModel = DescentModel::DensityScaled;
     profile.seaLevelDescentRate = descentRate;
-    if (descentExponent)
-        profile.descentExponent = *descentExponent;
+    profile.descentExponent = exponent();
     return profile;
 }
 
@@ -30,6 +29,24 @@ FlightSpread LaunchSiteStats::applyTo(FlightSpread spread) const
     if (descentSd && descentRate > 0.0)
         spread.descentRate = *descentSd / descentRate;
     return spread;
+}
+
+double LaunchSiteStats::exponent() const
+{
+    // Fits to SondeHub tracks (tools/validation/fit_descents.py): parachutes about 0.42–0.46,
+    // free-falling sondes 0.32–0.38.
+    if (descentExponent)
+        return *descentExponent;
+    return descentRate < 7.0 ? 0.45 : 0.33;
+}
+
+QString LaunchSiteStats::descentSource() const
+{
+    if (descentMeasured() && descentTracks > 0)
+        return QStringLiteral("measured on %1 descents up to %2").arg(descentTracks).arg(descentUntil.toString(QStringLiteral("d.M.yyyy")));
+    if (descentMeasured())
+        return QStringLiteral("measured on recent descents");
+    return QStringLiteral("SondeHub's long-term average, possibly out of date");
 }
 
 QList<QTime> LaunchSiteStats::launchTimes() const
@@ -63,6 +80,8 @@ std::vector<LaunchSiteStats> parseLaunchSiteStats(const QByteArray &json)
         s.descentSd = optional("descentSd");
         s.flights = o.value(QStringLiteral("flights")).toInt();
         s.descentExponent = optional("descentK");
+        s.descentTracks = o.value(QStringLiteral("descentTracks")).toInt();
+        s.descentUntil = QDate::fromString(o.value(QStringLiteral("descentUntil")).toString(), Qt::ISODate);
         for (const QJsonValue &t : o.value(QStringLiteral("times")).toArray()) {
             const QTime time = QTime::fromString(t.toString(), QStringLiteral("HH:mm"));
             if (time.isValid())
@@ -117,8 +136,7 @@ SiteBalloon siteBalloon(const LaunchSiteStats &site, const std::optional<RecentF
     b.ascentRate = recent ? recent->ascentRate : site.ascentRate;
     b.burstAltitude = recent ? std::round(recent->burstAltitude / 100.0) * 100.0 : site.burstAltitude;
     b.descentRate = site.descentRate;
-    if (site.descentExponent)
-        b.descentExponent = *site.descentExponent;
+    b.descentExponent = site.exponent();
     if (recent) {
         b.ascentSd = recent->ascentSd;
         b.burstSd = std::round(recent->burstSd / 50.0) * 50.0;

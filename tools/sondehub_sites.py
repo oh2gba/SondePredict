@@ -8,9 +8,15 @@ flights it has seen, with their spread. Only sites with all three averages are k
 import gzip, json, os, urllib.request
 
 URL = 'https://api.v2.sondehub.org/sites'
-# Density-scaled descent (sea-level speed, exponent k) fitted to real descents with
-# tools/validation/tracks.py; replaces SondeHub's sea-level average for these sites.
-DESCENT_FITS = {'02963': (11.7, 0.33)}  # Jokioinen: 30 flights, Sep–Oct 2026
+# Density-scaled descents (sea-level speed v0, exponent k) fitted to recent SondeHub tracks by
+# tools/validation/fit_descents.py; they replace SondeHub's long-term descent average, which can
+# be far off (a station that started using a parachute).
+FITS = os.path.join(os.path.dirname(__file__), 'descent-fits.json')
+# Where whole predictions were checked against real landings (tools/validation/stations.py,
+# 8–22 Oct 2026), the values that matched the landings best win over the fall-time fit:
+# Jokioinen its fit to 30 flights, Stavanger SondeHub's own average.
+DESCENT_OVERRIDES = {'02963': {'v0': 11.7, 'k': 0.33, 'tracks': 30, 'until': '2026-10-22'},
+                     '01415': {'v0': 14.6, 'k': 0.33, 'tracks': 16, 'until': '2026-10-22'}}
 OUT = os.path.join(os.path.dirname(__file__), '..', 'src', 'app', 'data', 'launch-sites.json')
 
 def main():
@@ -20,6 +26,8 @@ def main():
         if r.headers.get('Content-Encoding') == 'gzip' or body[:2] == b'\x1f\x8b':
             body = gzip.decompress(body)
     sites = json.loads(body)
+    fits = json.load(open(FITS)) if os.path.exists(FITS) else {}
+    fits.update(DESCENT_OVERRIDES)
     out = []
     for s in sites.values():
         if not all(k in s for k in ('ascent_rate', 'burst_altitude', 'descent_rate', 'position')):
@@ -35,8 +43,10 @@ def main():
         times = sorted({':'.join(t.split(':')[1:3]) for t in s.get('times', []) if t.count(':') == 2})
         if times:
             e['times'] = times
-        if s['station'] in DESCENT_FITS:
-            e['descent'], e['descentK'] = DESCENT_FITS[s['station']]
+        if s['station'] in fits:
+            f = fits[s['station']]
+            e['descent'], e['descentK'] = f['v0'], f['k']
+            e['descentTracks'], e['descentUntil'] = f['tracks'], f['until']
         out.append(e)
     out.sort(key=lambda e: e['name'])
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

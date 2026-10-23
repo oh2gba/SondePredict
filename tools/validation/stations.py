@@ -116,6 +116,7 @@ def main():
     open(ini, 'w').write(f'[landing_area]\nenabled=true\nascent_sigma={sd_up:.3f}\nburst_sigma={sd_burst:.0f}\ndescent_sigma=0.18\nsamples=50\n')
     print(f'  {len(flights)} flights, {len(jobs)} predictions with MEPS …'); sys.stdout.flush()
     res = subprocess.run([cli, '--replay', path, '--config', ini, '--meps-only'], capture_output=True, text=True)
+    open(os.path.join(tmp, f'replay_{site_id}.out'), 'w').write(res.stdout)  # for re-analysis without re-running
 
     stats = {}
     for line in res.stdout.splitlines():
@@ -126,8 +127,9 @@ def main():
         c = truth[serial]
         err = H.dist((float(p[4]), float(p[5])), c) / 1000
         inside = None; size = None
-        if len(p) >= 14 and p[9]:
-            clat, clon, smaj, smin, bearing = float(p[9]), float(p[10]), float(p[11]), float(p[12]), float(p[13])
+        # id, burst lat/lon/time, landing lat/lon/time, model, then the area: lat, lon, σ major, σ minor, bearing
+        if len(p) >= 13 and p[8]:
+            clat, clon, smaj, smin, bearing = float(p[8]), float(p[9]), float(p[10]), float(p[11]), float(p[12])
             # Inside the 95 % ellipse (scale 2.448 σ), in a local flat frame.
             north = (c['lat'] - clat) * 111320.0
             east = (c['lon'] - clon) * 111320.0 * math.cos(math.radians(clat))

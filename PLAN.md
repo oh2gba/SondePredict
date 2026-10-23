@@ -192,7 +192,13 @@ models and of MET Norway's MEPS (see `tools/validation/README.md`). Outcome:
   winds rotated to east/north, level heights from the hypsometric equation. `WindField` got a
   grid geometry so it can hold that grid.
 * Inside the MEPS area the predictor averages MEPS and ECMWF (`BlendedWind`): better than either
-  at every lead time. Fallback order: MEPS + global → MEPS alone (when Open-Meteo's quota is
+  at every lead time.
+* Real flights from SondeHub (`tools/validation/landings.py`, `stations.py`): the balloon defaults,
+  the measured ascent shape, the descent fit (11.7 m/s, k 0.33 at Jokioinen) and, for 22 regional
+  stations, descents fitted to their own tracks (SondeHub's averages can be far off). The landing
+  area adds a forecast wind error (0.5 m/s a few hours ahead, growing with lead time and for slow
+  parachute descents) so that ~95 % of real landings fall inside the 95 % area.
+* Batches cover several launch sites with their own launch times and balloon values. Fallback order: MEPS + global → MEPS alone (when Open-Meteo's quota is
   used up) → global alone; a source that failed is not tried again for the same prediction.
 
 ## User manual ✅

@@ -1,0 +1,200 @@
+{
+ "03238": {
+  "name": "Albemarle (United Kingdom)",
+  "v0": 3.3,
+  "k": 0.54,
+  "tracks": 6,
+  "rmsSeconds": 788,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "03918": {
+  "name": "Castor Bay (United Kingdom)",
+  "v0": 3.5,
+  "k": 0.52,
+  "tracks": 8,
+  "rmsSeconds": 738,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "06260": {
+  "name": "De Bilt (Netherlands)",
+  "v0": 4.8,
+  "k": 0.4,
+  "tracks": 8,
+  "rmsSeconds": 491,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "10410": {
+  "name": "Essen (Germany)",
+  "v0": 6.1,
+  "k": 0.46,
+  "tracks": 8,
+  "rmsSeconds": 326,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "10184": {
+  "name": "Greifswald (Germany)",
+  "v0": 4.0,
+  "k": 0.4,
+  "tracks": 8,
+  "rmsSeconds": 572,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "02963": {
+  "name": "Jokioinen (Finland)",
+  "v0": 12.3,
+  "k": 0.32,
+  "tracks": 8,
+  "rmsSeconds": 149,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "06060": {
+  "name": "Karup (Denmark)",
+  "v0": 12.3,
+  "k": 0.4,
+  "tracks": 8,
+  "rmsSeconds": 116,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "26629": {
+  "name": "Kaunas (Lithuania)",
+  "v0": 9.7,
+  "k": 0.54,
+  "tracks": 4,
+  "rmsSeconds": 82,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "03743": {
+  "name": "Larkhill (United Kingdom)",
+  "v0": 2.1,
+  "k": 0.6,
+  "tracks": 3,
+  "rmsSeconds": 45,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "12374": {
+  "name": "Legionowo (Poland)",
+  "v0": 9.0,
+  "k": 0.44,
+  "tracks": 8,
+  "rmsSeconds": 57,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "03005": {
+  "name": "Lerwick (United Kingdom)",
+  "v0": 5.6,
+  "k": 0.44,
+  "tracks": 8,
+  "rmsSeconds": 345,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "10393": {
+  "name": "Lindenberg (Germany)",
+  "v0": 3.2,
+  "k": 0.54,
+  "tracks": 8,
+  "rmsSeconds": 359,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "10548": {
+  "name": "Meiningen (Germany)",
+  "v0": 4.0,
+  "k": 0.48,
+  "tracks": 8,
+  "rmsSeconds": 492,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "10113": {
+  "name": "Norderney (Germany)",
+  "v0": 4.4,
+  "k": 0.46,
+  "tracks": 8,
+  "rmsSeconds": 725,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "11520": {
+  "name": "Praha-Libus (Czech Republic)",
+  "v0": 11.8,
+  "k": 0.26,
+  "tracks": 8,
+  "rmsSeconds": 261,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "10035": {
+  "name": "Schleswig (Germany)",
+  "v0": 4.7,
+  "k": 0.44,
+  "tracks": 8,
+  "rmsSeconds": 536,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "26435": {
+  "name": "Skriveri (Latvia)",
+  "v0": 7.7,
+  "k": 0.36,
+  "tracks": 8,
+  "rmsSeconds": 178,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "01415": {
+  "name": "Stavanger / Sola (Norway)",
+  "v0": 12.3,
+  "k": 0.38,
+  "tracks": 8,
+  "rmsSeconds": 90,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "26038": {
+  "name": "Tallinn (Estonia)",
+  "v0": 7.2,
+  "k": 0.44,
+  "tracks": 8,
+  "rmsSeconds": 221,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "06447": {
+  "name": "Uccle (Belgium)",
+  "v0": 5.0,
+  "k": 0.48,
+  "tracks": 8,
+  "rmsSeconds": 216,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "03354": {
+  "name": "Watnall, Nottingham (United Kingdom)",
+  "v0": 4.3,
+  "k": 0.54,
+  "tracks": 8,
+  "rmsSeconds": 655,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ },
+ "12425": {
+  "name": "Wroclaw I (Poland)",
+  "v0": 8.7,
+  "k": 0.42,
+  "tracks": 8,
+  "rmsSeconds": 132,
+  "from": "2026-09-22",
+  "until": "2026-10-22"
+ }
+}

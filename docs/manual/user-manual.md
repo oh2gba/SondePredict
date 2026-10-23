@@ -149,9 +149,11 @@ details give its size and the direction of its long axis, for example *18.6 × 1
 axis 15°–195° (NNE–SSW)*.
 
 The wind error grows with how far ahead the launch is, as forecasts do, so an area for a launch
-two days ahead is clearly larger than one for a launch this afternoon. Its size was set from real
-flights: in tests against flights that SondeHub's receivers followed to the ground, about 95% of
-the sondes came down inside the 95% area.
+two days ahead is clearly larger than one for a launch this afternoon. It is also larger for
+sondes that come down slowly on a parachute: they drift in the low-level winds, which forecasts
+get least right, for an hour or more. Its size was set from real flights from Jokioinen,
+Tallinn, Stavanger and Greifswald that SondeHub's receivers followed to the ground: about 95% of
+them came down inside the 95% area.
 
 A long, thin area means the sonde travels along a steady wind and mainly its timing is
 uncertain: it will come down somewhere along that line. A rounder area means the wind changes
@@ -275,7 +277,10 @@ window pointing at it.
   receivers track, nearest to your locations first (type part of a name to search). **Use**
   looks up the site's flights of the last 30 days on SondeHub and fills in their median ascent
   rate and burst altitude, the site's descent rate, and how much they vary (for the landing
-  area). Without an internet connection it uses SondeHub's long-term averages, which can be
+  area). For about 20 stations around the Baltic and the North Sea the descent was measured on
+  their recent flights; for the others it is SondeHub's long-term average, which can be out of
+  date (one station listed at 13.7 m/s turned out to use a parachute and fall at 7 m/s). The
+  tooltip and the line under the list say which. Without an internet connection it uses SondeHub's long-term averages, which can be
   years old. This is the easiest way to good settings for the station you hunt; use it again now
   and then, as stations change balloons.
 * **Ascent rate**: how fast the balloon climbs on average, in m/s. With **Slower around the
