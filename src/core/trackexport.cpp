@@ -8,7 +8,6 @@
 #include <QXmlStreamWriter>
 
 #include <cmath>
-#include <numbers>
 
 namespace sp {
 
@@ -31,18 +30,6 @@ QString number(double v, int decimals)
     return QString::number(v, 'f', decimals);
 }
 
-double windSpeed(const TrackPoint &p)
-{
-    return std::hypot(p.u, p.v);
-}
-
-// Meteorological direction: where the wind blows from, degrees.
-double windFrom(const TrackPoint &p)
-{
-    double deg = std::atan2(-p.u, -p.v) * 180.0 / std::numbers::pi;
-    return deg < 0 ? deg + 360.0 : deg;
-}
-
 QString landingDescription(const PredictionRecord &rec)
 {
     const SimulationResult &r = rec.prediction.result;
@@ -58,188 +45,11 @@ QString landingDescription(const PredictionRecord &rec)
     return text;
 }
 
-void kmlStyle(QXmlStreamWriter &x, const QString &id, const QString &lineColor, const QString &iconColor, const QString &icon)
-{
-    x.writeStartElement(QStringLiteral("Style"));
-    x.writeAttribute(QStringLiteral("id"), id);
-    if (!lineColor.isEmpty()) {
-        x.writeStartElement(QStringLiteral("LineStyle"));
-        x.writeTextElement(QStringLiteral("color"), lineColor);
-        x.writeTextElement(QStringLiteral("width"), QStringLiteral("3"));
-        x.writeEndElement();
-        x.writeStartElement(QStringLiteral("PolyStyle"));
-        x.writeTextElement(QStringLiteral("color"), QStringLiteral("40") + lineColor.mid(2)); // translucent curtain
-        x.writeEndElement();
-    }
-    if (!icon.isEmpty()) {
-        x.writeStartElement(QStringLiteral("IconStyle"));
-        x.writeTextElement(QStringLiteral("color"), iconColor);
-        x.writeStartElement(QStringLiteral("Icon"));
-        x.writeTextElement(QStringLiteral("href"), icon);
-        x.writeEndElement();
-        x.writeEndElement();
-    }
-    x.writeEndElement();
-}
-
-void kmlPoint(QXmlStreamWriter &x, const QString &name, const QString &style, GeoPoint p, double altitude,
-              const QString &description, std::optional<double> time = std::nullopt)
-{
-    x.writeStartElement(QStringLiteral("Placemark"));
-    x.writeTextElement(QStringLiteral("name"), name);
-    if (!description.isEmpty())
-        x.writeTextElement(QStringLiteral("description"), description);
-    if (time) {
-        x.writeStartElement(QStringLiteral("TimeStamp"));
-        x.writeTextElement(QStringLiteral("when"), isoTime(*time));
-        x.writeEndElement();
-    }
-    x.writeTextElement(QStringLiteral("styleUrl"), u'#' + style);
-    x.writeStartElement(QStringLiteral("Point"));
-    x.writeTextElement(QStringLiteral("altitudeMode"), QStringLiteral("absolute"));
-    x.writeTextElement(QStringLiteral("coordinates"),
-                       QStringLiteral("%1,%2,%3").arg(number(p.lon, 6), number(p.lat, 6), number(altitude, 0)));
-    x.writeEndElement();
-    x.writeEndElement();
-}
-
-void kmlTrack(QXmlStreamWriter &x, const QString &name, const QString &style, const std::vector<const TrackPoint *> &points)
-{
-    if (points.size() < 2)
-        return;
-    x.writeStartElement(QStringLiteral("Placemark"));
-    x.writeTextElement(QStringLiteral("name"), name);
-    x.writeTextElement(QStringLiteral("styleUrl"), u'#' + style);
-    x.writeStartElement(QStringLiteral("gx:Track"));
-    x.writeTextElement(QStringLiteral("altitudeMode"), QStringLiteral("absolute"));
-    x.writeTextElement(QStringLiteral("extrude"), QStringLiteral("1"));
-    for (const TrackPoint *p : points)
-        x.writeTextElement(QStringLiteral("when"), isoTime(p->time));
-    for (const TrackPoint *p : points) {
-        x.writeTextElement(QStringLiteral("gx:coord"),
-                           QStringLiteral("%1 %2 %3").arg(number(p->position.lon, 6), number(p->position.lat, 6), number(p->altitude, 0)));
-    }
-    // Clicking the track in Google Earth shows these values for that point.
-    x.writeStartElement(QStringLiteral("ExtendedData"));
-    x.writeStartElement(QStringLiteral("SchemaData"));
-    x.writeAttribute(QStringLiteral("schemaUrl"), QStringLiteral("#trackData"));
-    const auto array = [&](const QString &field, auto value) {
-        x.writeStartElement(QStringLiteral("gx:SimpleArrayData"));
-        x.writeAttribute(QStringLiteral("name"), field);
-        for (const TrackPoint *p : points)
-            x.writeTextElement(QStringLiteral("gx:value"), value(*p));
-        x.writeEndElement();
-    };
-    array(QStringLiteral("altitude"), [](const TrackPoint &p) { return number(p.altitude, 0); });
-    array(QStringLiteral("wind_speed"), [](const TrackPoint &p) { return number(windSpeed(p), 1); });
-    array(QStringLiteral("wind_from"), [](const TrackPoint &p) { return number(windFrom(p), 0); });
-    x.writeEndElement(); // SchemaData
-    x.writeEndElement(); // ExtendedData
-    x.writeEndElement(); // gx:Track
-    x.writeEndElement(); // Placemark
-}
-
 } // namespace
 
 QString predictionTitle(const PredictionRecord &record)
 {
     return QStringLiteral("%1 %2").arg(record.siteName, shortTime(double(record.prediction.params.launchTime)));
-}
-
-QByteArray toKml(const std::vector<PredictionRecord> &records)
-{
-    QByteArray out;
-    QXmlStreamWriter x(&out);
-    x.setAutoFormatting(true);
-    x.writeStartDocument();
-    x.writeStartElement(QStringLiteral("kml"));
-    x.writeDefaultNamespace(QStringLiteral("http://www.opengis.net/kml/2.2"));
-    x.writeNamespace(QStringLiteral("http://www.google.com/kml/ext/2.2"), QStringLiteral("gx"));
-    x.writeStartElement(QStringLiteral("Document"));
-    x.writeTextElement(QStringLiteral("name"), QStringLiteral("Sonde Predict"));
-
-    // KML colours are aabbggrr.
-    const QString pin = QStringLiteral("http://maps.google.com/mapfiles/kml/paddle/wht-blank.png");
-    const QString dot = QStringLiteral("http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png");
-    kmlStyle(x, QStringLiteral("ascent"), QStringLiteral("ffe5881e"), {}, {});
-    kmlStyle(x, QStringLiteral("descent"), QStringLiteral("ff3539e5"), {}, {});
-    kmlStyle(x, QStringLiteral("launch"), {}, QStringLiteral("ff327d2e"), dot);
-    kmlStyle(x, QStringLiteral("burst"), {}, QStringLiteral("ff006cef"), dot);
-    kmlStyle(x, QStringLiteral("landing"), {}, QStringLiteral("ff2828c6"), pin);
-    kmlStyle(x, QStringLiteral("home"), {}, QStringLiteral("ffc06515"), pin);
-    kmlStyle(x, QStringLiteral("area"), QStringLiteral("ff008fff"), {}, {}); // amber outline, translucent fill
-
-    x.writeStartElement(QStringLiteral("Schema"));
-    x.writeAttribute(QStringLiteral("id"), QStringLiteral("trackData"));
-    for (const auto &[name, label] : {std::pair{QStringLiteral("altitude"), QStringLiteral("Altitude (m)")},
-                                      std::pair{QStringLiteral("wind_speed"), QStringLiteral("Wind speed (m/s)")},
-                                      std::pair{QStringLiteral("wind_from"), QStringLiteral("Wind from (°)")}}) {
-        x.writeStartElement(QStringLiteral("gx:SimpleArrayField"));
-        x.writeAttribute(QStringLiteral("name"), name);
-        x.writeAttribute(QStringLiteral("type"), QStringLiteral("float"));
-        x.writeTextElement(QStringLiteral("displayName"), label);
-        x.writeEndElement();
-    }
-    x.writeEndElement(); // Schema
-
-    for (std::size_t i = 0; i < records.size(); ++i) {
-        const PredictionRecord &rec = records[i];
-        const SimulationResult &r = rec.prediction.result;
-        if (r.track.empty() || !r.landing)
-            continue;
-
-        x.writeStartElement(QStringLiteral("Folder"));
-        x.writeTextElement(QStringLiteral("name"), predictionTitle(rec));
-        x.writeTextElement(QStringLiteral("open"), i == 0 ? QStringLiteral("1") : QStringLiteral("0"));
-        x.writeTextElement(QStringLiteral("description"), landingDescription(rec));
-
-        std::vector<const TrackPoint *> ascent, descent;
-        for (const TrackPoint &p : r.track)
-            (p.phase == FlightPhase::Ascent ? ascent : descent).push_back(&p);
-        if (!ascent.empty() && !descent.empty())
-            descent.insert(descent.begin(), ascent.back()); // continuous at the burst
-        kmlTrack(x, QStringLiteral("Ascent"), QStringLiteral("ascent"), ascent);
-        kmlTrack(x, QStringLiteral("Descent"), QStringLiteral("descent"), descent);
-
-        const TrackPoint &start = r.track.front();
-        kmlPoint(x, rec.siteName, QStringLiteral("launch"), start.position, start.altitude,
-                 QStringLiteral("Launch %1").arg(shortTime(start.time)), start.time);
-        if (r.burst) {
-            kmlPoint(x, QStringLiteral("Burst"), QStringLiteral("burst"), r.burst->position, r.burst->altitude,
-                     QStringLiteral("Burst at %1 m, %2").arg(qRound(r.burst->altitude)).arg(shortTime(r.burst->time)), r.burst->time);
-        }
-        kmlPoint(x, QStringLiteral("Landing %1").arg(shortTime(r.landing->time).mid(11, 5)), QStringLiteral("landing"),
-                 r.landing->position, r.landing->altitude, landingDescription(rec), r.landing->time);
-        if (rec.home)
-            kmlPoint(x, rec.homeName, QStringLiteral("home"), *rec.home, 0.0, {});
-        if (const auto &area = rec.prediction.landingArea) {
-            x.writeStartElement(QStringLiteral("Placemark"));
-            x.writeTextElement(QStringLiteral("name"), QStringLiteral("Landing area (95%)"));
-            x.writeTextElement(QStringLiteral("description"),
-                               QStringLiteral("%1 x %2 km from %3 varied flights")
-                                   .arg(number(area->majorAxis() / 1000.0, 1), number(area->minorAxis() / 1000.0, 1))
-                                   .arg(area->samples));
-            x.writeTextElement(QStringLiteral("styleUrl"), QStringLiteral("#area"));
-            x.writeStartElement(QStringLiteral("Polygon"));
-            x.writeTextElement(QStringLiteral("tessellate"), QStringLiteral("1"));
-            x.writeStartElement(QStringLiteral("outerBoundaryIs"));
-            x.writeStartElement(QStringLiteral("LinearRing"));
-            QStringList coords;
-            for (const GeoPoint &p : area->outline(0.95))
-                coords << QStringLiteral("%1,%2,0").arg(number(p.lon, 6), number(p.lat, 6));
-            x.writeTextElement(QStringLiteral("coordinates"), coords.join(u' '));
-            x.writeEndElement(); // LinearRing
-            x.writeEndElement(); // outerBoundaryIs
-            x.writeEndElement(); // Polygon
-            x.writeEndElement(); // Placemark
-        }
-        x.writeEndElement(); // Folder
-    }
-
-    x.writeEndElement(); // Document
-    x.writeEndElement(); // kml
-    x.writeEndDocument();
-    return out;
 }
 
 QByteArray toGpx(const std::vector<PredictionRecord> &records)

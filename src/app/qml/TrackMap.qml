@@ -46,11 +46,13 @@ Item {
             grabPermissions: PointerHandler.TakeOverForbidden
             onActiveChanged: if (active) map.startCentroid = map.toCoordinate(pinch.centroid.position, false)
             onScaleChanged: (delta) => {
+                root.userMoved = true;
                 map.zoomLevel += Math.log2(delta);
                 map.alignCoordinateToPoint(map.startCentroid, pinch.centroid.position);
             }
         }
         WheelHandler {
+            onWheel: root.userMoved = true
             acceptedDevices: Qt.platform.pluginName === "cocoa" || Qt.platform.pluginName === "wayland"
                              ? PointerDevice.Mouse | PointerDevice.TouchPad : PointerDevice.Mouse
             rotationScale: 1 / 120
@@ -58,7 +60,7 @@ Item {
         }
         DragHandler {
             target: null
-            onTranslationChanged: (delta) => map.pan(-delta.x, -delta.y)
+            onTranslationChanged: (delta) => { root.userMoved = true; map.pan(-delta.x, -delta.y); }
         }
 
         MapItemView {
@@ -122,18 +124,17 @@ Item {
         }
     }
 
-    // Zoom to the latest requested area once the map can do it (it ignores requests made
-    // before it has a size), but don't fight the user's panning on later resizes.
-    property var pendingFit: null
+    // Zoom to the latest requested area once the map can (it ignores requests made before
+    // it has a size), and again when it is resized, until the user moves or zooms the map.
+    property var fitShape: null
+    property bool userMoved: false
     function applyFit() {
-        if (pendingFit && map.mapReady && map.width > 0 && map.height > 0) {
-            map.fitViewportToGeoShape(pendingFit, 60);
-            pendingFit = null;
-        }
+        if (fitShape && !userMoved && map.mapReady && map.width > 0 && map.height > 0)
+            map.fitViewportToGeoShape(fitShape, 60);
     }
     Connections {
         target: trackModel
-        function onFitRequested(shape) { root.pendingFit = shape; root.applyFit(); }
+        function onFitRequested(shape) { root.fitShape = shape; root.userMoved = false; root.applyFit(); }
     }
     Connections {
         target: map

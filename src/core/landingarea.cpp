@@ -66,7 +66,7 @@ std::vector<GeoPoint> LandingArea::outline(double probability, int points) const
     return out;
 }
 
-LandingAreaResult estimateLandingArea(const LaunchParams &params, const WindField &field, const FlightSpread &spread)
+LandingAreaResult estimateLandingArea(const LaunchParams &params, const WindSampler &field, const FlightSpread &spread)
 {
     LandingAreaResult result;
     if (!spread.enabled || spread.samples < 3)

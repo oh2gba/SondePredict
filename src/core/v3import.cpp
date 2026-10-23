@@ -253,7 +253,6 @@ V3ImportResult importV3Config(const QString &path, AppSettings &settings)
     }
 
     if (const auto *general = root.section(QStringLiteral("general"))) {
-        settings.general.googleEarthPath = general->value(QStringLiteral("google_earth"), settings.general.googleEarthPath);
         settings.general.overwritePredictions = toBool(general->value(QStringLiteral("overwrite_predictions")), settings.general.overwritePredictions);
         settings.general.useUtc = toBool(general->value(QStringLiteral("use_utc")), settings.general.useUtc);
     }
@@ -268,23 +267,26 @@ V3ImportResult importV3Config(const QString &path, AppSettings &settings)
         }
 
         ScheduleRule rule;
-        rule.siteName = schedule->value(QStringLiteral("siteLoc")).trimmed();
+        BatchSite site;
+        site.siteName = schedule->value(QStringLiteral("siteLoc")).trimmed();
         rule.homeName = schedule->value(QStringLiteral("urLoc")).trimmed();
         for (const QString &d : configobj::toList(schedule->value(QStringLiteral("days")))) {
             if (const auto v = toNumber(d))
                 rule.days << static_cast<int>(*v);
         }
+        // v3 launched on the hour; FMI launches about 30 min before the synoptic hour.
         for (const QString &h : configobj::toList(schedule->value(QStringLiteral("hours")))) {
             if (const auto v = toNumber(h); v && *v >= 0 && *v < 24)
-                rule.hours << static_cast<int>(*v);
+                site.times << QTime(static_cast<int>(*v), 30);
         }
         rule.intervalHours = std::clamp(static_cast<int>(toNumber(schedule->value(QStringLiteral("interval"))).value_or(0)), 0, 168);
+        rule.sites << site;
 
-        if (!rule.siteName.isEmpty() && !rule.days.isEmpty() && !rule.hours.isEmpty()) {
+        if (!site.siteName.isEmpty() && !rule.days.isEmpty() && !site.times.isEmpty()) {
             settings.schedule = rule;
             result.scheduleImported = true;
-            result.messages << QStringLiteral("Batch schedule imported: %1 → %2, %3 day(s) × %4 hour(s).")
-                                   .arg(rule.siteName, rule.homeName).arg(rule.days.size()).arg(rule.hours.size());
+            result.messages << QStringLiteral("Batch schedule imported: %1 → %2, %3 day(s) × %4 launch time(s).")
+                                   .arg(site.siteName, rule.homeName).arg(rule.days.size()).arg(site.times.size());
         }
     }
 

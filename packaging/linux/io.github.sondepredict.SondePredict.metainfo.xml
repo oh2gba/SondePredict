@@ -5,9 +5,9 @@
   <name>Sonde Predict</name>
   <summary>Predict radiosonde flight paths and landing points</summary>
   <description>
-    <p>Sonde Predict calculates where a weather balloon's radiosonde will land, using GFS upper-air
-    winds, so radiosonde hunters can tell whether a launch is worth chasing. Predictions are shown
-    on a map and can be exported to Google Earth (KML) and GPS apps (GPX).</p>
+    <p>Sonde Predict calculates where a weather balloon's radiosonde will land, using upper-air
+    wind forecasts (MET Norway's MEPS in the Nordic area, global models elsewhere), so radiosonde hunters can tell whether a launch is worth chasing. Predictions are shown
+    on a map or in a built-in 3D view and can be exported to GPS and phone apps (GPX).</p>
   </description>
   <launchable type="desktop-id">sondepredict.desktop</launchable>
   <categories>

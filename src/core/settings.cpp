@@ -2,9 +2,12 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStringList>
+
+#include <algorithm>
 
 namespace sp {
 
@@ -87,6 +90,58 @@ Location *AppSettings::location(const QString &name)
     return const_cast<Location *>(std::as_const(*this).location(name));
 }
 
+FlightProfile AppSettings::profileFor(const Location *site) const
+{
+    FlightProfile p = profile;
+    if (site && site->balloon) {
+        const SiteBalloon &b = *site->balloon;
+        p.ascentRate = b.ascentRate;
+        p.shapedAscent = b.shapedAscent;
+        p.burstAltitude = b.burstAltitude;
+        p.descentModel = DescentModel::DensityScaled;
+        p.seaLevelDescentRate = b.descentRate;
+        p.descentExponent = b.descentExponent;
+    }
+    return p;
+}
+
+FlightSpread AppSettings::spreadFor(const Location *site) const
+{
+    FlightSpread s = spread;
+    if (site && site->balloon) {
+        s.ascentRate = site->balloon->ascentSd;
+        s.burstAltitude = site->balloon->burstSd;
+        s.descentRate = site->balloon->descentSd;
+    }
+    return s;
+}
+
+std::optional<QList<QTime>> parseLaunchTimes(const QString &text)
+{
+    static const QRegularExpression separators(QStringLiteral("[,;\\s]+"));
+    QList<QTime> times;
+    for (const QString &part : text.split(separators, Qt::SkipEmptyParts)) {
+        QTime t = QTime::fromString(part, QStringLiteral("H:mm"));
+        if (!t.isValid())
+            t = QTime::fromString(part, QStringLiteral("HHmm"));
+        if (!t.isValid())
+            return std::nullopt;
+        if (!times.contains(t))
+            times << t;
+    }
+    std::sort(times.begin(), times.end());
+    return times;
+}
+
+QString formatLaunchTimes(QList<QTime> times)
+{
+    std::sort(times.begin(), times.end());
+    QStringList parts;
+    for (const QTime &t : times)
+        parts << t.toString(QStringLiteral("HH:mm"));
+    return parts.join(QStringLiteral(", "));
+}
+
 QString AppSettings::defaultPath()
 {
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
@@ -115,6 +170,18 @@ AppSettings AppSettings::load(const QString &path, QString *error)
         l.position.lon = readDouble(s, QStringLiteral("lon"), 0.0);
         l.altitude = readDouble(s, QStringLiteral("alt"), 0.0);
         l.warningDistanceKm = readDouble(s, QStringLiteral("warning_km"), l.warningDistanceKm);
+        if (s.value(QStringLiteral("balloon")).toString() == QLatin1String("own")) {
+            SiteBalloon b;
+            b.ascentRate = readDouble(s, QStringLiteral("ascent_rate"), b.ascentRate);
+            b.shapedAscent = readBool(s, QStringLiteral("shaped_ascent"), b.shapedAscent);
+            b.burstAltitude = readDouble(s, QStringLiteral("burst_altitude"), b.burstAltitude);
+            b.descentRate = readDouble(s, QStringLiteral("descent_rate"), b.descentRate);
+            b.descentExponent = readDouble(s, QStringLiteral("descent_exponent"), b.descentExponent);
+            b.ascentSd = readDouble(s, QStringLiteral("ascent_sigma"), b.ascentSd);
+            b.burstSd = readDouble(s, QStringLiteral("burst_sigma"), b.burstSd);
+            b.descentSd = readDouble(s, QStringLiteral("descent_sigma"), b.descentSd);
+            l.balloon = b;
+        }
         if (!l.name.isEmpty())
             out.locations << l;
     }
@@ -123,6 +190,7 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     FlightProfile &p = out.profile;
     s.beginGroup(QStringLiteral("balloon"));
     p.ascentRate = readDouble(s, QStringLiteral("ascent_rate"), p.ascentRate);
+    p.shapedAscent = s.value(QStringLiteral("shaped_ascent"), p.shapedAscent).toBool();
     p.burstAltitude = readDouble(s, QStringLiteral("burst_altitude"), p.burstAltitude);
     p.descentModel = s.value(QStringLiteral("descent_model")).toString() == QLatin1String("legacy")
         ? DescentModel::Legacy : DescentModel::DensityScaled;
@@ -146,6 +214,8 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     s.endGroup();
 
     s.beginGroup(QStringLiteral("wind"));
+    out.wind.useMeps = s.value(QStringLiteral("use_meps"), out.wind.useMeps).toBool();
+    out.wind.averageMeps = s.value(QStringLiteral("average_meps"), out.wind.averageMeps).toBool();
     out.wind.apiUrl = s.value(QStringLiteral("api_url")).toString();
     out.wind.apiKey = s.value(QStringLiteral("api_key")).toString();
     out.wind.model = s.value(QStringLiteral("model"), out.wind.model).toString();
@@ -162,7 +232,6 @@ AppSettings AppSettings::load(const QString &path, QString *error)
         }
     }
     s.beginGroup(optionsGroup);
-    out.general.googleEarthPath = s.value(QStringLiteral("google_earth")).toString();
     out.general.overwritePredictions = readBool(s, QStringLiteral("overwrite_predictions"), out.general.overwritePredictions);
     out.general.useUtc = readBool(s, QStringLiteral("use_utc"), out.general.useUtc);
     s.endGroup();
@@ -170,13 +239,30 @@ AppSettings AppSettings::load(const QString &path, QString *error)
     if (s.childGroups().contains(QStringLiteral("schedule"))) {
         s.beginGroup(QStringLiteral("schedule"));
         ScheduleRule rule;
-        rule.siteName = s.value(QStringLiteral("site")).toString();
         rule.homeName = s.value(QStringLiteral("home")).toString();
         rule.days = splitInts(s.value(QStringLiteral("days")));
-        rule.hours = splitInts(s.value(QStringLiteral("hours")));
         rule.intervalHours = s.value(QStringLiteral("interval_hours"), 0).toInt();
-        rule.minute = s.value(QStringLiteral("minute"), 0).toInt();
         rule.autoRun = readBool(s, QStringLiteral("auto_run"), false);
+        const int sites = s.beginReadArray(QStringLiteral("sites"));
+        for (int i = 0; i < sites; ++i) {
+            s.setArrayIndex(i);
+            BatchSite site;
+            site.siteName = s.value(QStringLiteral("site")).toString();
+            site.times = parseLaunchTimes(s.value(QStringLiteral("times")).toStringList().join(u',')).value_or(QList<QTime>{});
+            if (!site.siteName.isEmpty())
+                rule.sites << site;
+        }
+        s.endArray();
+        // Before 5.1 a batch had one site and launch hours with one minute for all.
+        if (sites == 0 && s.contains(QStringLiteral("site"))) {
+            BatchSite site;
+            site.siteName = s.value(QStringLiteral("site")).toString();
+            const int minute = std::clamp(s.value(QStringLiteral("minute"), 0).toInt(), 0, 59);
+            for (int hour : splitInts(s.value(QStringLiteral("hours"))))
+                site.times << QTime(std::clamp(hour, 0, 23), minute);
+            if (!site.siteName.isEmpty())
+                rule.sites << site;
+        }
         out.schedule = rule;
         s.endGroup();
     }
@@ -207,11 +293,23 @@ bool AppSettings::save(const QString &path, QString *error) const
         s.setValue(QStringLiteral("lon"), QString::number(l.position.lon, 'f', 6));
         s.setValue(QStringLiteral("alt"), QString::number(l.altitude, 'g', 10));
         s.setValue(QStringLiteral("warning_km"), QString::number(l.warningDistanceKm, 'g', 10));
+        if (const auto &b = l.balloon) {
+            s.setValue(QStringLiteral("balloon"), QStringLiteral("own"));
+            s.setValue(QStringLiteral("ascent_rate"), QString::number(b->ascentRate, 'g', 10));
+            s.setValue(QStringLiteral("shaped_ascent"), b->shapedAscent);
+            s.setValue(QStringLiteral("burst_altitude"), QString::number(b->burstAltitude, 'g', 10));
+            s.setValue(QStringLiteral("descent_rate"), QString::number(b->descentRate, 'g', 10));
+            s.setValue(QStringLiteral("descent_exponent"), QString::number(b->descentExponent, 'g', 10));
+            s.setValue(QStringLiteral("ascent_sigma"), QString::number(b->ascentSd, 'g', 10));
+            s.setValue(QStringLiteral("burst_sigma"), QString::number(b->burstSd, 'g', 10));
+            s.setValue(QStringLiteral("descent_sigma"), QString::number(b->descentSd, 'g', 10));
+        }
     }
     s.endArray();
 
     s.beginGroup(QStringLiteral("balloon"));
     s.setValue(QStringLiteral("ascent_rate"), QString::number(profile.ascentRate, 'g', 10));
+    s.setValue(QStringLiteral("shaped_ascent"), profile.shapedAscent);
     s.setValue(QStringLiteral("burst_altitude"), QString::number(profile.burstAltitude, 'g', 10));
     s.setValue(QStringLiteral("descent_model"), descentModelName(profile.descentModel));
     s.setValue(QStringLiteral("descent_rate"), QString::number(profile.seaLevelDescentRate, 'g', 10));
@@ -234,6 +332,8 @@ bool AppSettings::save(const QString &path, QString *error) const
     s.endGroup();
 
     s.beginGroup(QStringLiteral("wind"));
+    s.setValue(QStringLiteral("use_meps"), wind.useMeps);
+    s.setValue(QStringLiteral("average_meps"), wind.averageMeps);
     s.setValue(QStringLiteral("api_url"), wind.apiUrl);
     s.setValue(QStringLiteral("api_key"), wind.apiKey);
     s.setValue(QStringLiteral("model"), wind.model);
@@ -241,20 +341,23 @@ bool AppSettings::save(const QString &path, QString *error) const
     s.endGroup();
 
     s.beginGroup(QStringLiteral("options"));
-    s.setValue(QStringLiteral("google_earth"), general.googleEarthPath);
     s.setValue(QStringLiteral("overwrite_predictions"), general.overwritePredictions);
     s.setValue(QStringLiteral("use_utc"), general.useUtc);
     s.endGroup();
 
     if (schedule) {
         s.beginGroup(QStringLiteral("schedule"));
-        s.setValue(QStringLiteral("site"), schedule->siteName);
         s.setValue(QStringLiteral("home"), schedule->homeName);
         s.setValue(QStringLiteral("days"), joinInts(schedule->days));
-        s.setValue(QStringLiteral("hours"), joinInts(schedule->hours));
         s.setValue(QStringLiteral("interval_hours"), schedule->intervalHours);
-        s.setValue(QStringLiteral("minute"), schedule->minute);
         s.setValue(QStringLiteral("auto_run"), schedule->autoRun);
+        s.beginWriteArray(QStringLiteral("sites"), int(schedule->sites.size()));
+        for (int i = 0; i < schedule->sites.size(); ++i) {
+            s.setArrayIndex(i);
+            s.setValue(QStringLiteral("site"), schedule->sites[i].siteName);
+            s.setValue(QStringLiteral("times"), formatLaunchTimes(schedule->sites[i].times));
+        }
+        s.endArray();
         s.endGroup();
     }
 

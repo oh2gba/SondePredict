@@ -1,6 +1,7 @@
 // sp-cli: command-line front end to the Sonde Predict core.
 
 #include "batch.h"
+#include "meps.h"
 #include "network.h"
 #include "openmeteo.h"
 #include "predictionstore.h"
@@ -20,6 +21,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <memory>
 
 namespace {
@@ -151,8 +153,11 @@ void printPrediction(const sp::Prediction &prediction, const std::optional<sp::G
               << QString::number(area->minorAxis() / 1000.0, 'f', 1) << " km, long axis " << qRound(area->majorBearing)
               << "°, from " << area->samples << " varied flights\n";
     }
-    out() << "Wind data: " << prediction.nodesFetched << " grid points fetched, " << requests
+    out() << "Wind data: " << sp::meps::modelName(prediction.model)
+          << ", " << prediction.nodesFetched << " grid points fetched, " << requests
           << " requests, " << prediction.passes << " passes\n";
+    if (!prediction.fallbackNote.isEmpty())
+        out() << "Fell back from " << prediction.fallbackNote << '\n';
     if (r.aboveTopLevel)
         out() << "Note: the flight went above the highest wind level (10 hPa); the top wind was held constant.\n";
 }
@@ -246,21 +251,27 @@ int main(int argc, char *argv[])
         {QStringLiteral("descent"), QStringLiteral("Descent rate at sea level, m/s (density model)."), QStringLiteral("m/s")},
         {QStringLiteral("exponent"), QStringLiteral("Descent density exponent k (density model)."), QStringLiteral("k")},
         {QStringLiteral("legacy"), QStringLiteral("Use the Sonde Predict v3 descent model: rate + altitude·gain/1000.")},
+        {QStringLiteral("constant-ascent"), QStringLiteral("Climb at the same speed all the way (instead of the measured shape).")},
         {QStringLiteral("density"), QStringLiteral("Use the density-scaled descent model.")},
         {QStringLiteral("legacy-rate"), QStringLiteral("v3 descent rate, m/s."), QStringLiteral("m/s")},
         {QStringLiteral("legacy-gain"), QStringLiteral("v3 descent gain."), QStringLiteral("gain")},
         {QStringLiteral("grid"), QStringLiteral("Wind grid spacing in degrees."), QStringLiteral("deg")},
-        {QStringLiteral("model"), QStringLiteral("Open-Meteo model, e.g. gfs_global."), QStringLiteral("name")},
+        {QStringLiteral("model"), QStringLiteral("Global model via Open-Meteo, e.g. ecmwf_ifs025 or gfs_global."), QStringLiteral("name")},
+        {QStringLiteral("meps"), QStringLiteral("Use MET Norway's MEPS (2.5 km) inside its area, the global model elsewhere.")},
+        {QStringLiteral("no-meps"), QStringLiteral("Use only the global model.")},
+        {QStringLiteral("meps-only"), QStringLiteral("Inside the MEPS area, use MEPS alone instead of averaging it with the global model.")},
         {QStringLiteral("api-url"), QStringLiteral("Open-Meteo endpoint, e.g. a subscription or self-hosted server."), QStringLiteral("url")},
         {QStringLiteral("api-key"), QStringLiteral("Open-Meteo API key (subscription)."), QStringLiteral("key")},
         {QStringLiteral("csv"), QStringLiteral("Write the predicted track to a CSV file."), QStringLiteral("file")},
         {QStringLiteral("compare"), QStringLiteral("Compare with a received flight (RS41Tracker CSV)."), QStringLiteral("file")},
-        {QStringLiteral("kml"), QStringLiteral("Write the prediction(s) as KML for Google Earth."), QStringLiteral("file")},
         {QStringLiteral("gpx"), QStringLiteral("Write the prediction(s) as GPX for GPS and phone apps."), QStringLiteral("file")},
         {QStringLiteral("save"), QStringLiteral("Store the prediction(s) in the prediction database.")},
         {QStringLiteral("batch"), QStringLiteral("Run the batch set up in the settings (days × launch hours).")},
         {QStringLiteral("no-area"), QStringLiteral("Skip the landing-area estimate.")},
-        {QStringLiteral("export"), QStringLiteral("Export stored predictions (ids from --list) with --kml / --gpx and exit."), QStringLiteral("ids")},
+        {QStringLiteral("verbose"), QStringLiteral("Show what happens: wind model and run, downloads, waits, each pass.")},
+        {QStringLiteral("export"), QStringLiteral("Export stored predictions (ids from --list) with --gpx and exit."), QStringLiteral("ids")},
+        {QStringLiteral("replay"), QStringLiteral("Validation: run the predictions listed in a CSV file (id,launch UTC,lat,lon,alt,ascent,burst,descent,exponent,shaped) "
+                                                  "sharing one wind cache, and print id,burst lat,lon,time,landing lat,lon,time per line."), QStringLiteral("file")},
         {QStringLiteral("list"), QStringLiteral("List stored predictions and exit.")},
         {QStringLiteral("locations"), QStringLiteral("List saved locations and exit.")},
         {QStringLiteral("import-v3"), QStringLiteral("Import a Sonde Predict v3 config.ini into the settings and exit."), QStringLiteral("config.ini")},
@@ -284,26 +295,24 @@ int main(int argc, char *argv[])
     if (parser.isSet(QStringLiteral("locations")))
         return listLocations(settings);
 
-    // Stored predictions to KML / GPX, no network needed.
+    // Stored predictions to GPX, no network needed.
     sp::PredictionStore store;
     const bool needStore = parser.isSet(QStringLiteral("save")) || parser.isSet(QStringLiteral("export"));
     if (needStore && !store.open(dbPath)) // before spending API quota on results that cannot be saved
         die(store.lastError());
 
     const auto writeExports = [&parser](const std::vector<sp::PredictionRecord> &records) {
-        for (const auto &[option, gpx] : {std::pair{QStringLiteral("kml"), false}, std::pair{QStringLiteral("gpx"), true}}) {
-            if (!parser.isSet(option))
-                continue;
-            const QString path = parser.value(option);
-            if (const QString error = sp::writeFile(path, gpx ? sp::toGpx(records) : sp::toKml(records)); !error.isEmpty())
-                die(error);
-            out() << (gpx ? "GPX" : "KML") << " written to " << path << '\n';
-        }
+        if (!parser.isSet(QStringLiteral("gpx")))
+            return;
+        const QString path = parser.value(QStringLiteral("gpx"));
+        if (const QString error = sp::writeFile(path, sp::toGpx(records)); !error.isEmpty())
+            die(error);
+        out() << "GPX written to " << path << '\n';
     };
 
     if (parser.isSet(QStringLiteral("export"))) {
-        if (!parser.isSet(QStringLiteral("kml")) && !parser.isSet(QStringLiteral("gpx")))
-            die(QStringLiteral("--export needs --kml and/or --gpx"));
+        if (!parser.isSet(QStringLiteral("gpx")))
+            die(QStringLiteral("--export needs --gpx"));
         std::vector<sp::PredictionRecord> records;
         for (const QString &id : parser.value(QStringLiteral("export")).split(u',', Qt::SkipEmptyParts)) {
             auto record = store.load(id.trimmed().toLongLong());
@@ -315,17 +324,22 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    sp::FlightProfile profile = settings.profile;
-    if (parser.isSet(QStringLiteral("ascent"))) profile.ascentRate = number(parser, QStringLiteral("ascent"));
-    if (parser.isSet(QStringLiteral("burst"))) profile.burstAltitude = number(parser, QStringLiteral("burst"));
-    if (parser.isSet(QStringLiteral("descent"))) profile.seaLevelDescentRate = number(parser, QStringLiteral("descent"));
-    if (parser.isSet(QStringLiteral("exponent"))) profile.descentExponent = number(parser, QStringLiteral("exponent"));
-    if (parser.isSet(QStringLiteral("legacy"))) profile.descentModel = sp::DescentModel::Legacy;
-    if (parser.isSet(QStringLiteral("density"))) profile.descentModel = sp::DescentModel::DensityScaled;
-    if (parser.isSet(QStringLiteral("legacy-rate"))) profile.legacyDescentRate = number(parser, QStringLiteral("legacy-rate"));
-    if (parser.isSet(QStringLiteral("legacy-gain"))) profile.legacyDescentGain = number(parser, QStringLiteral("legacy-gain"));
-    if (const char *error = profile.validationError(); *error)
-        die(QString::fromUtf8(error));
+    // Balloon options override the settings, including a launch location's own balloon values.
+    const auto withOptions = [&parser](sp::FlightProfile p) {
+        if (parser.isSet(QStringLiteral("ascent"))) p.ascentRate = number(parser, QStringLiteral("ascent"));
+        if (parser.isSet(QStringLiteral("burst"))) p.burstAltitude = number(parser, QStringLiteral("burst"));
+        if (parser.isSet(QStringLiteral("descent"))) p.seaLevelDescentRate = number(parser, QStringLiteral("descent"));
+        if (parser.isSet(QStringLiteral("exponent"))) p.descentExponent = number(parser, QStringLiteral("exponent"));
+        if (parser.isSet(QStringLiteral("legacy"))) p.descentModel = sp::DescentModel::Legacy;
+        if (parser.isSet(QStringLiteral("constant-ascent"))) p.shapedAscent = false;
+        if (parser.isSet(QStringLiteral("density"))) p.descentModel = sp::DescentModel::DensityScaled;
+        if (parser.isSet(QStringLiteral("legacy-rate"))) p.legacyDescentRate = number(parser, QStringLiteral("legacy-rate"));
+        if (parser.isSet(QStringLiteral("legacy-gain"))) p.legacyDescentGain = number(parser, QStringLiteral("legacy-gain"));
+        if (const char *error = p.validationError(); *error)
+            die(QString::fromUtf8(error));
+        return p;
+    };
+    const sp::FlightProfile profile = withOptions(settings.profile);
 
     const double grid = parser.isSet(QStringLiteral("grid")) ? number(parser, QStringLiteral("grid")) : settings.wind.gridStep;
     if (grid < 0.1 || grid > 2.0)
@@ -344,14 +358,33 @@ int main(int argc, char *argv[])
     QNetworkAccessManager network;
     sp::OpenMeteoClient client(&network, options);
     auto field = std::make_shared<sp::WindField>(grid);
+    sp::MepsClient mepsClient(&network);
+    const bool useMeps = parser.isSet(QStringLiteral("meps")) || (settings.wind.useMeps && !parser.isSet(QStringLiteral("no-meps")));
+    const std::vector<sp::WindBackend> backends = sp::meps::standardBackends(
+        &mepsClient, std::make_shared<sp::WindField>(mepsClient.geometry()), &client, field, options.model, useMeps,
+        settings.wind.averageMeps && !parser.isSet(QStringLiteral("meps-only")));
+    const bool verbose = parser.isSet(QStringLiteral("verbose"));
+    const auto activity = [](const QString &line) {
+        QTextStream(stderr) << QDateTime::currentDateTimeUtc().toString(QStringLiteral("HH:mm:ss")) << "  " << line << Qt::endl;
+    };
+    if (verbose) {
+        client.setLogger(activity);
+        mepsClient.setLogger(activity);
+    }
+    const auto requests = [&]() { return client.requestCount() + mepsClient.requestCount(); };
     sp::FlightSpread spread = settings.spread;
     if (parser.isSet(QStringLiteral("no-area")))
         spread.enabled = false;
-    QObject::connect(&client, &sp::OpenMeteoClient::rateLimited, [](int seconds) {
+    // With --verbose the activity lines already say this.
+    QObject::connect(&client, &sp::OpenMeteoClient::rateLimited, [verbose](int seconds) {
+        if (verbose)
+            return;
         QTextStream(stderr) << "Open-Meteo rate limit reached, retrying in " << seconds << " s..." << Qt::endl;
     });
-    QObject::connect(&client, &sp::OpenMeteoClient::paced, [](int seconds) {
-        QTextStream(stderr) << "Waiting " << seconds << " s to stay within Open-Meteo's free limit..." << Qt::endl;
+    QObject::connect(&client, &sp::OpenMeteoClient::paced, [verbose](int seconds) {
+        if (verbose)
+            return;
+        QTextStream(stderr) << "Waiting " << sp::openmeteo::describeWait(seconds) << " to stay within Open-Meteo's free limit..." << Qt::endl;
     });
 
     const auto saveRecord = [&](const sp::PredictionRecord &record) {
@@ -365,15 +398,17 @@ int main(int argc, char *argv[])
     if (parser.isSet(QStringLiteral("batch"))) {
         if (!settings.schedule)
             die(QStringLiteral("no batch is set up; create one in the app (Settings → Batch) or import it with --import-v3"));
-        sp::AppSettings batchSettings = settings;
-        batchSettings.profile = profile;
-        const sp::BatchPlan plan = sp::planBatch(*settings.schedule, batchSettings, QDateTime::currentSecsSinceEpoch());
+        sp::BatchPlan plan = sp::planBatch(*settings.schedule, settings, QDateTime::currentSecsSinceEpoch());
+        for (sp::BatchJob &job : plan.jobs)
+            job.params.profile = withOptions(job.params.profile);
         if (!plan.error.isEmpty())
             die(plan.error);
         if (plan.jobs.empty())
             die(QStringLiteral("all batch launches are beyond the forecast range"));
 
-        auto *runner = new sp::BatchRunner(&client, field, &app);
+        auto *runner = new sp::BatchRunner(backends, &app);
+        if (verbose)
+            QObject::connect(runner, &sp::BatchRunner::activity, activity);
         runner->setSpread(spread);
         auto records = std::make_shared<std::vector<sp::PredictionRecord>>();
         QObject::connect(runner, &sp::BatchRunner::jobStarted, [](int index, int total, const sp::BatchJob &job) {
@@ -386,7 +421,7 @@ int main(int argc, char *argv[])
             record.homeName = job.homeName;
             record.home = job.home;
             record.manual = false;
-            record.model = options.model;
+            record.model = prediction.model;
             record.prediction = prediction;
             const sp::TrackPoint &land = *prediction.result.landing;
             out() << utc(double(job.params.launchTime), "yyyy-MM-dd HH:mm") << "  " << job.siteName << " → " << position(land.position);
@@ -400,12 +435,76 @@ int main(int argc, char *argv[])
         QObject::connect(runner, &sp::BatchRunner::jobFailed, [](int, const sp::BatchJob &job, const QString &error) {
             out() << utc(double(job.params.launchTime), "yyyy-MM-dd HH:mm") << "  " << job.siteName << "  failed: " << error << Qt::endl;
         });
+        QObject::connect(runner, &sp::BatchRunner::limitReached, [](int skipped, const QString &message) {
+            out() << message << ". Batch stopped; " << skipped << " more launch(es) not predicted." << Qt::endl;
+        });
         QObject::connect(runner, &sp::BatchRunner::finished, [&, records](int succeeded, int failed) {
             writeExports(*records);
-            out() << succeeded << " predicted, " << failed << " failed, " << client.requestCount() << " requests" << Qt::endl;
+            out() << succeeded << " predicted, " << failed << " failed, " << requests() << " requests" << Qt::endl;
             QCoreApplication::exit(failed ? 2 : 0);
         });
         runner->start(plan.jobs);
+        return app.exec();
+    }
+
+    // ------------------------------------------------------------ replay (validation)
+    if (parser.isSet(QStringLiteral("replay"))) {
+        QFile file(parser.value(QStringLiteral("replay")));
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+            die(QStringLiteral("cannot read %1").arg(file.fileName()));
+        struct Job {
+            QString id;
+            sp::LaunchParams params;
+        };
+        auto jobs = std::make_shared<std::vector<Job>>();
+        while (!file.atEnd()) {
+            const QStringList f = QString::fromUtf8(file.readLine()).trimmed().split(u',');
+            if (f.size() < 10 || f[0].startsWith(u'#'))
+                continue;
+            Job job;
+            job.id = f[0];
+            job.params.launchTime = QDateTime::fromString(f[1], Qt::ISODate).toSecsSinceEpoch();
+            job.params.site = {f[2].toDouble(), f[3].toDouble()};
+            job.params.siteAltitude = f[4].toDouble();
+            job.params.profile = profile;
+            job.params.profile.ascentRate = f[5].toDouble();
+            job.params.profile.burstAltitude = f[6].toDouble();
+            job.params.profile.descentModel = sp::DescentModel::DensityScaled;
+            job.params.profile.seaLevelDescentRate = f[7].toDouble();
+            job.params.profile.descentExponent = f[8].toDouble();
+            job.params.profile.shapedAscent = f[9].trimmed() == QLatin1String("1");
+            jobs->push_back(job);
+        }
+        auto *predictor = new sp::Predictor(backends, &app);
+        predictor->setSpread({false});
+        if (verbose)
+            QObject::connect(predictor, &sp::Predictor::activity, activity);
+        auto index = std::make_shared<std::size_t>(0);
+        auto next = std::make_shared<std::function<void()>>();
+        *next = [=]() {
+            if (*index >= jobs->size()) {
+                QCoreApplication::exit(0);
+                return;
+            }
+            predictor->start((*jobs)[*index].params);
+        };
+        const auto point = [](const std::optional<sp::TrackPoint> &p) {
+            return p ? QStringLiteral("%1,%2,%3").arg(p->position.lat, 0, 'f', 5).arg(p->position.lon, 0, 'f', 5)
+                                                 .arg(utc(p->time, "yyyy-MM-dd'T'HH:mm:ss"))
+                     : QStringLiteral(",,");
+        };
+        QObject::connect(predictor, &sp::Predictor::finished, &app, [=](const sp::Prediction &prediction) {
+            out() << (*jobs)[*index].id << ',' << point(prediction.result.burst) << ',' << point(prediction.result.landing)
+                  << ',' << prediction.model << Qt::endl;
+            ++*index;
+            (*next)();
+        });
+        QObject::connect(predictor, &sp::Predictor::failed, &app, [=](const QString &error) {
+            out() << (*jobs)[*index].id << ",,,,,,,failed: " << error << Qt::endl;
+            ++*index;
+            (*next)();
+        });
+        QMetaObject::invokeMethod(&app, [next]() { (*next)(); }, Qt::QueuedConnection);
         return app.exec();
     }
 
@@ -421,10 +520,12 @@ int main(int argc, char *argv[])
     if (!homeText.isEmpty())
         home = resolveLocation(homeText, settings, "home");
 
+    // A saved location may have its own balloon values.
+    const sp::Location *siteLocation = site.name.isEmpty() ? nullptr : settings.location(site.name);
     sp::LaunchParams params;
     params.site = site.point;
     params.siteAltitude = site.altitude;
-    params.profile = profile;
+    params.profile = withOptions(settings.profileFor(siteLocation));
 
     QDateTime launch = QDateTime::fromString(parser.value(QStringLiteral("time")), Qt::ISODate);
     if (!launch.isValid())
@@ -433,14 +534,20 @@ int main(int argc, char *argv[])
         launch = QDateTime(launch.date(), launch.time(), QTimeZone::UTC);
     params.launchTime = launch.toSecsSinceEpoch();
 
-    sp::Predictor predictor(&client, field);
-    predictor.setSpread(spread);
-    QObject::connect(&predictor, &sp::Predictor::progress, [](const QString &message) {
+    sp::Predictor predictor(backends);
+    sp::FlightSpread siteSpread = settings.spreadFor(siteLocation);
+    siteSpread.enabled = spread.enabled;
+    predictor.setSpread(siteSpread);
+    if (verbose)
+        QObject::connect(&predictor, &sp::Predictor::activity, activity);
+    QObject::connect(&predictor, &sp::Predictor::progress, [verbose](const QString &message) {
+        if (verbose)
+            return; // the activity lines say more
         QTextStream(stderr) << message << "..." << Qt::endl;
     });
     QObject::connect(&predictor, &sp::Predictor::failed, [](const QString &error) { die(error); });
     QObject::connect(&predictor, &sp::Predictor::finished, &app, [&](const sp::Prediction &prediction) {
-        printPrediction(prediction, home ? std::optional(home->point) : std::nullopt, client.requestCount());
+        printPrediction(prediction, home ? std::optional(home->point) : std::nullopt, requests());
 
         sp::PredictionRecord record;
         record.siteName = site.name.isEmpty() ? position(site.point) : site.name;
@@ -448,7 +555,7 @@ int main(int argc, char *argv[])
             record.homeName = home->name.isEmpty() ? position(home->point) : home->name;
             record.home = home->point;
         }
-        record.model = options.model;
+        record.model = prediction.model;
         record.prediction = prediction;
 
         if (parser.isSet(QStringLiteral("csv"))) {

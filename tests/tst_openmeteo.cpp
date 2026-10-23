@@ -2,6 +2,7 @@
 #include "openmeteo.h"
 
 #include <QFile>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QUrlQuery>
 
@@ -44,7 +45,7 @@ private slots:
         QVERIFY(!q.hasQueryItem(QStringLiteral("apikey")));
 
         sp::OpenMeteoOptions subscription;
-        subscription.baseUrl = QStringLiteral("https://customer-api.open-meteo.com/v1/gfs");
+        subscription.baseUrl = QStringLiteral("https://customer-api.open-meteo.com/v1/forecast");
         subscription.apiKey = QStringLiteral("abc123");
         const QUrl paid = sp::openmeteo::buildUrl(subscription, field, kNodes, kFirstHour, kFirstHour + 1);
         QCOMPARE(paid.host(), QStringLiteral("customer-api.open-meteo.com"));
@@ -102,6 +103,22 @@ private slots:
             t = budget.reserve(200, t); // 5 × 200 = 1000 within the first minutes
         QVERIFY(t < 3600 * 1000);
         QCOMPARE(budget.reserve(200, t), qint64(3600 * 1000)); // the hour is full until the first expires
+    }
+
+    void rateBudgetSharedThroughLog()
+    {
+        // Two programs (or a restarted one) see each other's calls through the log.
+        QTemporaryDir dir;
+        const QString log = dir.filePath(QStringLiteral("usage.log"));
+        sp::RateBudget app(550, 4800, log);
+        QCOMPARE(app.reserve(430, 1000), qint64(1000));
+        sp::RateBudget cli(550, 4800, log);
+        QCOMPARE(cli.reserve(200, 2000), qint64(61000)); // 430 + 200 > 550: wait for the first to expire
+        sp::RateBudget restarted(550, 4800, log);
+        QCOMPARE(restarted.reserve(100, 3000), qint64(61000)); // after the cli booking, which fits with it
+        // Entries older than an hour are ignored.
+        sp::RateBudget later(550, 1000, log);
+        QCOMPARE(later.reserve(900, 4000 * 1000), qint64(4000 * 1000));
     }
 
     void reportsApiError()

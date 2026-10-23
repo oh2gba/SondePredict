@@ -17,6 +17,8 @@ private slots:
         QVERIFY(s.locations.isEmpty());
         QCOMPARE(s.profile.ascentRate, sp::FlightProfile{}.ascentRate);
         QCOMPARE(s.wind.gridStep, 0.25);
+        QVERIFY(s.wind.useMeps);
+        QVERIFY(s.wind.averageMeps);
         QVERIFY(!s.schedule);
     }
 
@@ -28,16 +30,19 @@ private slots:
         sp::AppSettings s;
         s.locations << sp::Location{QStringLiteral("Jokioinen"), {60.814, 23.499}, 104.0, 30.0}
                     << sp::Location{QStringLiteral("Home, Espoo"), {60.2055, 24.6559}, 25.0, 40.0}
-                    << sp::Location{QStringLiteral("Sodankylä"), {67.367, 26.63}, 179.0, 30.0};
+                    << sp::Location{QStringLiteral("Sodankylä"), {67.367, 26.63}, 179.0, 30.0,
+                                    sp::SiteBalloon{4.6, false, 28700, 5.2, 0.5, 0.45, 2260, 0.2}};
         s.profile.ascentRate = 5.7;
         s.profile.burstAltitude = 31000;
         s.profile.descentModel = sp::DescentModel::Legacy;
         s.profile.legacyDescentRate = 9.9;
         s.profile.legacyDescentGain = 0.63;
         s.network = {sp::ProxyMode::Manual, QStringLiteral("http://user:pw@proxy:3128")};
-        s.wind = {QStringLiteral("https://example.org/v1/gfs"), QStringLiteral("key"), QStringLiteral("gfs_seamless"), 0.5};
-        s.general = {QStringLiteral("C:\\Program Files\\Google Earth\\googleearth.exe"), false, false};
-        s.schedule = sp::ScheduleRule{QStringLiteral("Jokioinen"), QStringLiteral("Home, Espoo"), {0, 1, 2}, {11, 23}, 15, 6, true};
+        s.wind = {false, false, QStringLiteral("https://example.org/v1/gfs"), QStringLiteral("key"), QStringLiteral("gfs_seamless"), 0.5};
+        s.general = {false, false};
+        s.schedule = sp::ScheduleRule{{{QStringLiteral("Jokioinen"), {QTime(23, 30), QTime(5, 30), QTime(11, 30)}},
+                                       {QStringLiteral("Sodankylä"), {QTime(11, 15)}}},
+                                      QStringLiteral("Home, Espoo"), {0, 1, 2}, 6, true};
         s.manualRun = {QStringLiteral("Jokioinen"), QStringLiteral("Sodankylä"), 23, 15};
 
         QString error;
@@ -58,16 +63,34 @@ private slots:
         QCOMPARE(r.network.proxyUrl, s.network.proxyUrl);
         QCOMPARE(r.wind.model, QStringLiteral("gfs_seamless"));
         QCOMPARE(r.wind.gridStep, 0.5);
+        QVERIFY(!r.wind.useMeps);
+        QVERIFY(!r.wind.averageMeps);
         QCOMPARE(r.wind.apiKey, QStringLiteral("key"));
-        QCOMPARE(r.general.googleEarthPath, s.general.googleEarthPath);
         QCOMPARE(r.general.overwritePredictions, false);
         QVERIFY(r.schedule);
         QCOMPARE(r.schedule->days, (QList<int>{0, 1, 2}));
-        QCOMPARE(r.schedule->hours, (QList<int>{11, 23}));
+        QCOMPARE(r.schedule->sites.size(), 2);
+        QCOMPARE(r.schedule->sites[0].siteName, QStringLiteral("Jokioinen"));
+        QCOMPARE(r.schedule->sites[0].times, (QList<QTime>{QTime(5, 30), QTime(11, 30), QTime(23, 30)})); // sorted
+        QCOMPARE(r.schedule->sites[1].siteName, QStringLiteral("Sodankylä"));
+        QCOMPARE(r.schedule->sites[1].times, (QList<QTime>{QTime(11, 15)}));
         QCOMPARE(r.schedule->homeName, QStringLiteral("Home, Espoo"));
         QCOMPARE(r.schedule->intervalHours, 6);
-        QCOMPARE(r.schedule->minute, 15);
         QCOMPARE(r.schedule->autoRun, true);
+        // A site's own balloon values, and the general ones for sites without.
+        QVERIFY(!r.locations[0].balloon);
+        QVERIFY(r.locations[2].balloon);
+        QCOMPARE(r.locations[2].balloon->burstAltitude, 28700.0);
+        QCOMPARE(r.locations[2].balloon->shapedAscent, false);
+        QCOMPARE(r.locations[2].balloon->descentSd, 0.2);
+        const sp::FlightProfile sod = r.profileFor(&r.locations[2]);
+        QCOMPARE(sod.ascentRate, 4.6);
+        QCOMPARE(sod.seaLevelDescentRate, 5.2);
+        QCOMPARE(sod.descentExponent, 0.5);
+        QCOMPARE(sod.descentModel, sp::DescentModel::DensityScaled);
+        QCOMPARE(r.spreadFor(&r.locations[2]).burstAltitude, 2260.0);
+        QCOMPARE(r.profileFor(&r.locations[0]).ascentRate, 5.7);
+        QCOMPARE(r.profileFor(nullptr).burstAltitude, 31000.0);
         QCOMPARE(r.manualRun.homeName, QStringLiteral("Sodankylä"));
         QCOMPARE(r.manualRun.hour, 23);
         QCOMPARE(r.manualRun.minute, 15);
@@ -79,12 +102,25 @@ private slots:
         const QString path = dir.filePath(QStringLiteral("edited.ini"));
         QFile f(path);
         QVERIFY(f.open(QIODevice::WriteOnly));
-        f.write("[schedule]\nsite=Jokioinen\ndays=0, 1\nhours=11\n");
+        // A batch as Sonde Predict 5.0 wrote it: one site, hours and one minute.
+        f.write("[schedule]\nsite=Jokioinen\ndays=0, 1\nhours=\"0,12\"\nminute=30\n");
         f.close();
         const sp::AppSettings s = sp::AppSettings::load(path);
         QVERIFY(s.schedule);
         QCOMPARE(s.schedule->days, (QList<int>{0, 1}));
-        QCOMPARE(s.schedule->hours, (QList<int>{11}));
+        QCOMPARE(s.schedule->sites.size(), 1);
+        QCOMPARE(s.schedule->sites[0].siteName, QStringLiteral("Jokioinen"));
+        QCOMPARE(s.schedule->sites[0].times, (QList<QTime>{QTime(0, 30), QTime(12, 30)}));
+    }
+
+    void parsesLaunchTimes()
+    {
+        QCOMPARE(sp::parseLaunchTimes(QStringLiteral("23:30, 5:30;11:30 0530")),
+                 std::optional(QList<QTime>{QTime(5, 30), QTime(11, 30), QTime(23, 30)}));
+        QCOMPARE(sp::parseLaunchTimes(QString()), std::optional(QList<QTime>{}));
+        QVERIFY(!sp::parseLaunchTimes(QStringLiteral("11:30, noon")));
+        QVERIFY(!sp::parseLaunchTimes(QStringLiteral("25:00")));
+        QCOMPARE(sp::formatLaunchTimes({QTime(23, 30), QTime(5, 0)}), QStringLiteral("05:00, 23:30"));
     }
 
     void readsOldGeneralSection()
@@ -93,10 +129,10 @@ private slots:
         const QString path = dir.filePath(QStringLiteral("old.ini"));
         QFile f(path);
         QVERIFY(f.open(QIODevice::WriteOnly));
-        f.write("[%General]\ngoogle_earth=/opt/ge\nuse_utc=false\n");
+        f.write("[%General]\noverwrite_predictions=false\nuse_utc=false\n");
         f.close();
         const sp::AppSettings s = sp::AppSettings::load(path);
-        QCOMPARE(s.general.googleEarthPath, QStringLiteral("/opt/ge"));
+        QCOMPARE(s.general.overwritePredictions, false);
         QCOMPARE(s.general.useUtc, false);
 
         QVERIFY(s.save(path));

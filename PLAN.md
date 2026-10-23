@@ -178,6 +178,23 @@ Not done (judged not worth it now): wind above 10 hPa (Open-Meteo has no GFS dat
 the top wind is held and flagged), km/mi units, an update check (no public repository yet).
 Dark mode follows the system palette already, except for the map tiles.
 
+### Validation against real soundings and MEPS ✅
+
+37 FMI Jokioinen soundings (October 2026) were compared with the forecast winds of the global
+models and of MET Norway's MEPS (see `tools/validation/README.md`). Outcome:
+
+* Balloon defaults: Jokioinen's SondeHub statistics (≈1 000 flights: 5.1 ± 0.4 m/s, burst
+  29 700 ± 1 850 m, descent 12.5 m/s ± 18 %), which the soundings confirm. Settings → Balloon
+  offers the statistics of ~320 launch sites (bundled snapshot, `tools/sondehub_sites.py`).
+* Default global model: ECMWF IFS (best a day or more ahead), instead of GFS.
+* MEPS (2.5 km, 65 model levels, hourly to 66 h, every 3 h) read directly from MET Norway's
+  THREDDS server over OPeNDAP (binary DAP2, own parser), on its Lambert grid (every 2nd point),
+  winds rotated to east/north, level heights from the hypsometric equation. `WindField` got a
+  grid geometry so it can hold that grid.
+* Inside the MEPS area the predictor averages MEPS and ECMWF (`BlendedWind`): better than either
+  at every lead time. Fallback order: MEPS + global → MEPS alone (when Open-Meteo's quota is
+  used up) → global alone; a source that failed is not tried again for the same prediction.
+
 ## User manual ✅
 
 Rewritten for Sonde Predict 5 (the v0.2–v0.6 manuals of v3 are in `recovered/docs`):

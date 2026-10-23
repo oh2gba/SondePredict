@@ -51,8 +51,6 @@ XmlStats scan(const QByteArray &xml)
     return stats;
 }
 
-const QString kKml = QStringLiteral("http://www.opengis.net/kml/2.2|");
-const QString kGx = QStringLiteral("http://www.google.com/kml/ext/2.2|");
 const QString kGpx = QStringLiteral("http://www.topografix.com/GPX/1/1|");
 
 } // namespace
@@ -60,36 +58,6 @@ const QString kGpx = QStringLiteral("http://www.topografix.com/GPX/1/1|");
 class TestTrackExport : public QObject {
     Q_OBJECT
 private slots:
-    void kmlStructure()
-    {
-        const std::vector<sp::PredictionRecord> records{makeRecord(QStringLiteral("Jokioinen"), true),
-                                                         makeRecord(QStringLiteral("Tikkakoski"), false)};
-        const QByteArray kml = sp::toKml(records);
-        const XmlStats s = scan(kml);
-        QVERIFY2(s.error.isEmpty(), qPrintable(s.error));
-
-        QCOMPARE(s.count.value(kKml + QStringLiteral("Folder")), 2);
-        QCOMPARE(s.count.value(kGx + QStringLiteral("Track")), 4); // ascent + descent each
-        // Every gx:Track needs as many <when> as <gx:coord>, and as many values per data array.
-        const int whens = s.count.value(kKml + QStringLiteral("when")) - 3 * 2; // minus point TimeStamps
-        QCOMPARE(whens, s.count.value(kGx + QStringLiteral("coord")));
-        QCOMPARE(s.count.value(kGx + QStringLiteral("value")), 3 * s.count.value(kGx + QStringLiteral("coord")));
-        // Landing, burst, launch for both; home for the first only.
-        QCOMPARE(s.count.value(kKml + QStringLiteral("Point")), 7);
-        QVERIFY(s.names.contains(QStringLiteral("Jokioinen 2026-10-23 11:00 UTC")));
-        QVERIFY(s.names.contains(QStringLiteral("Home")));
-        QVERIFY(kml.contains("altitudeMode>absolute"));
-    }
-
-    void kmlDescentStartsAtBurst()
-    {
-        const sp::PredictionRecord rec = makeRecord(QStringLiteral("Jokioinen"), false);
-        const QByteArray kml = sp::toKml({rec});
-        const QString burst = QStringLiteral("%1 %2 28000").arg(rec.prediction.result.burst->position.lon, 0, 'f', 6)
-                                  .arg(rec.prediction.result.burst->position.lat, 0, 'f', 6);
-        QCOMPARE(QString::fromUtf8(kml).count(burst), 2); // end of ascent, start of descent
-    }
-
     void gpxStructure()
     {
         const sp::PredictionRecord rec = makeRecord(QStringLiteral("Jokioinen"), true);
@@ -108,12 +76,12 @@ private slots:
     void writesFiles()
     {
         QTemporaryDir dir;
-        const QString path = dir.filePath(QStringLiteral("out.kml"));
-        QCOMPARE(sp::writeFile(path, "<kml/>"), QString());
+        const QString path = dir.filePath(QStringLiteral("out.gpx"));
+        QCOMPARE(sp::writeFile(path, "<gpx/>"), QString());
         QFile f(path);
         QVERIFY(f.open(QIODevice::ReadOnly));
-        QCOMPARE(f.readAll(), QByteArray("<kml/>"));
-        QVERIFY(!sp::writeFile(dir.filePath(QStringLiteral("missing/dir/out.kml")), "x").isEmpty());
+        QCOMPARE(f.readAll(), QByteArray("<gpx/>"));
+        QVERIFY(!sp::writeFile(dir.filePath(QStringLiteral("missing/dir/out.gpx")), "x").isEmpty());
     }
 };
 

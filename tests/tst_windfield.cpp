@@ -3,6 +3,8 @@
 
 #include <QTest>
 
+#include <algorithm>
+
 class TestWindField : public QObject {
     Q_OBJECT
 private slots:
@@ -84,6 +86,27 @@ private slots:
 
         field.insert({{0, 720}, 5}, 0.0, {});
         QVERIFY(field.contains({{0, -720}, 5}));
+    }
+
+    void blendAveragesAndTagsMissingNodes()
+    {
+        auto a = std::make_shared<sp::WindField>(0.25);
+        auto b = std::make_shared<sp::WindField>(0.5);
+        sptest::fill(*a, {60.0, 23.0}, {61.0, 24.0}, 1000, 1001, sptest::uniform(10.0, 0.0), 100.0);
+        sptest::fill(*b, {60.0, 23.0}, {61.0, 24.0}, 1000, 1001, sptest::uniform(0.0, 6.0), 300.0);
+        const sp::BlendedWind blend({a, b});
+        std::set<sp::NodeKey> missing;
+        auto s = blend.sample({60.5, 23.5}, 5000.0, 1000.5 * 3600.0, &missing);
+        QVERIFY(s && missing.empty());
+        QCOMPARE(s->u, 5.0);
+        QCOMPARE(s->v, 3.0);
+        QCOMPARE(s->groundElevation, 100.0); // from the first field
+
+        // Outside the second field's data: its nodes are reported with layer 1.
+        s = blend.sample({60.5, 25.6}, 5000.0, 1000.5 * 3600.0, &missing);
+        QVERIFY(!missing.empty());
+        QVERIFY(std::all_of(missing.begin(), missing.end(), [](const sp::NodeKey &k) { return k.layer == 0 || k.layer == 1; }));
+        QVERIFY(std::any_of(missing.begin(), missing.end(), [](const sp::NodeKey &k) { return k.layer == 1; }));
     }
 };
 

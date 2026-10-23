@@ -4,12 +4,17 @@
 
 #include <QWidget>
 
+#include <functional>
+
+class QPainter;
+class QPainterPath;
+
 #include <optional>
 #include <vector>
 
-// Altitude against time since launch for the selected predictions (the first one in colour,
-// the others grey), with the wind speed of the first on a second axis. Hovering shows the
-// values at that moment.
+// Altitude against time since launch. One prediction: ascent and descent in their colours,
+// with the wind speed and direction on a second axis. Several: one colour each, with a
+// legend. Hovering shows the values at that moment.
 class ProfileWidget : public QWidget {
     Q_OBJECT
 public:
@@ -24,6 +29,14 @@ protected:
 
 private:
     QRectF plotArea() const;
+    void paintSingle(QPainter &p, const std::function<double(double)> &px, const std::function<double(double)> &py,
+                     const std::function<double(double)> &pw, const QColor &windColor);
+    void paintSeveral(QPainter &p, const std::function<double(double)> &px, const std::function<double(double)> &py,
+                      const std::function<double(double)> &pw);
+    static QPainterPath phasePath(const std::vector<sp::TrackPoint> &track, sp::FlightPhase phase,
+                                  const std::function<double(double)> &px, const std::function<double(double)> &py);
+    static QColor seriesColor(std::size_t index);
+    static QString label(const sp::PredictionRecord &record);
 
     std::vector<sp::PredictionRecord> m_records;
     double m_maxMinutes = 1.0;

@@ -32,19 +32,51 @@ ProfileWind interpolateProfile(const std::vector<LevelWind> &levels, double alti
 
 } // namespace
 
-WindField::WindField(double gridStep)
-    : m_step(gridStep)
-    , m_lonCount(static_cast<int>(std::lround(360.0 / gridStep)))
+LatLonGrid::LatLonGrid(double step)
+    : m_step(step)
+    , m_lonCount(static_cast<int>(std::lround(360.0 / step)))
 {
+}
+
+void LatLonGrid::toGrid(GeoPoint p, double &x, double &y) const
+{
+    x = p.lon / m_step;
+    y = p.lat / m_step;
+}
+
+GeoPoint LatLonGrid::position(NodeIndex n) const
+{
+    return {n.lat * m_step, normalizeLon(n.lon * m_step)};
+}
+
+WindField::WindField(double gridStep)
+    : WindField(std::make_shared<LatLonGrid>(gridStep))
+{
+}
+
+WindField::WindField(std::shared_ptr<const GridGeometry> geometry)
+    : m_geometry(std::move(geometry))
+    , m_lonCount(m_geometry->wrapCount())
+{
+}
+
+double WindField::gridStep() const
+{
+    const auto *grid = dynamic_cast<const LatLonGrid *>(m_geometry.get());
+    return grid ? grid->step() : 0.0;
 }
 
 NodeIndex WindField::cellOf(GeoPoint p) const
 {
-    return wrap({static_cast<int>(std::floor(p.lat / m_step)), static_cast<int>(std::floor(p.lon / m_step))});
+    double x = 0.0, y = 0.0;
+    m_geometry->toGrid(p, x, y);
+    return wrap({static_cast<int>(std::floor(y)), static_cast<int>(std::floor(x))});
 }
 
 NodeIndex WindField::wrap(NodeIndex n) const
 {
+    if (m_lonCount <= 0)
+        return n;
     const int half = m_lonCount / 2;
     int lon = (n.lon + half) % m_lonCount;
     if (lon < 0)
@@ -54,7 +86,7 @@ NodeIndex WindField::wrap(NodeIndex n) const
 
 GeoPoint WindField::position(NodeIndex n) const
 {
-    return {n.lat * m_step, normalizeLon(n.lon * m_step)};
+    return m_geometry->position(n);
 }
 
 void WindField::insert(NodeKey key, double groundElevation, std::vector<LevelWind> levels)
@@ -96,7 +128,8 @@ const WindField::Entry &WindField::lookup(NodeKey key, std::set<NodeKey> *missin
     for (const auto &[candidate, entry] : m_nodes) {
         const double dLat = candidate.node.lat - key.node.lat;
         double dLon = std::abs(candidate.node.lon - key.node.lon);
-        dLon = std::min(dLon, m_lonCount - dLon);
+        if (m_lonCount > 0)
+            dLon = std::min(dLon, m_lonCount - dLon);
         const double dHour = static_cast<double>(candidate.hour - key.hour) * 4.0;
         const double score = dLat * dLat + dLon * dLon + dHour * dHour;
         if (score < bestScore) {
@@ -114,8 +147,8 @@ std::optional<WindSample> WindField::sample(GeoPoint p, double altitude, double 
     if (m_nodes.empty())
         return std::nullopt;
 
-    const double y = p.lat / m_step;
-    const double x = p.lon / m_step;
+    double x = 0.0, y = 0.0;
+    m_geometry->toGrid(p, x, y);
     const int i0 = static_cast<int>(std::floor(y));
     const int j0 = static_cast<int>(std::floor(x));
     const double fy = y - i0;
@@ -142,6 +175,44 @@ std::optional<WindSample> WindField::sample(GeoPoint p, double altitude, double 
                 out.aboveTopLevel = out.aboveTopLevel || wind.aboveTop;
             }
         }
+    }
+    return out;
+}
+
+BlendedWind::BlendedWind(std::vector<std::shared_ptr<const WindField>> fields)
+    : m_fields(std::move(fields))
+{
+}
+
+std::optional<WindSample> BlendedWind::sample(GeoPoint p, double altitude, double unixTime,
+                                              std::set<NodeKey> *missing) const
+{
+    std::optional<WindSample> out;
+    int count = 0;
+    std::set<NodeKey> layerMissing;
+    for (std::size_t i = 0; i < m_fields.size(); ++i) {
+        layerMissing.clear();
+        const std::optional<WindSample> s = m_fields[i]->sample(p, altitude, unixTime, missing ? &layerMissing : nullptr);
+        if (missing) {
+            for (NodeKey key : layerMissing) {
+                key.layer = int(i);
+                missing->insert(key);
+            }
+        }
+        if (!s)
+            continue;
+        if (!out) {
+            out = *s; // ground elevation from the first field with data
+        } else {
+            out->u += s->u;
+            out->v += s->v;
+            out->aboveTopLevel = out->aboveTopLevel || s->aboveTopLevel;
+        }
+        ++count;
+    }
+    if (out && count > 1) {
+        out->u /= count;
+        out->v /= count;
     }
     return out;
 }

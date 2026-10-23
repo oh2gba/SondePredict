@@ -16,3 +16,4 @@ aqtinstall.log
 .idea/
 .vscode/
 *.swp
+/tools/validation/__pycache__/

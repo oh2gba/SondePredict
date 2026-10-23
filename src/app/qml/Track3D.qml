@@ -1,5 +1,5 @@
 // 3D view of predicted tracks over an OpenStreetMap ground image. Data: the C++ object "scene3d".
-// Scene units are 100 m; x east, y up, z south. Heights are multiplied by `exaggeration`.
+// Scene units are 100 m; x east, y up, z south. Heights are shown at true scale.
 import QtQuick
 import QtQuick.Controls
 import QtQuick3D
@@ -8,7 +8,7 @@ import SondePredict
 
 Item {
     id: root
-    property real exaggeration: 2
+    readonly property real exaggeration: 1 // kept as a knob for the geometry; true scale
     readonly property real r: scene3d.sceneRadius
     readonly property var markerColors: ({
         launch: "#2e7d32", burst: "#ef6c00", landing: "#c62828", home: "#1565c0"
@@ -102,7 +102,7 @@ Item {
                     geometry: TubeGeometry { points: track.modelData.descent; radius: track.tubeRadius; verticalScale: root.exaggeration }
                     materials: PrincipledMaterial { baseColor: "#e53935"; roughness: 0.7 }
                 }
-                // See-through curtains down to the ground, as in Google Earth.
+                // See-through curtains down to the ground show the shape of the flight.
                 Model {
                     opacity: track.modelData.current ? 0.22 : 0.1
                     geometry: CurtainGeometry { points: track.modelData.ascent; verticalScale: root.exaggeration }
@@ -165,20 +165,14 @@ Item {
                 }
             }
             Row {
-                spacing: 6
-                Text { text: qsTr("Height ×%1").arg(root.exaggeration.toFixed(0)); font.pixelSize: 11; color: "#202020"; anchors.verticalCenter: parent.verticalCenter; width: 62 }
-                Slider {
-                    from: 1; to: 10; stepSize: 1
-                    value: root.exaggeration
-                    implicitWidth: 140
-                    onMoved: root.exaggeration = value
-                }
+                spacing: 8
                 Button { text: qsTr("Reset view"); onClicked: root.resetView() }
-            }
-            Text {
-                text: qsTr("Drag to turn, scroll to zoom, right-drag to move")
-                font.pixelSize: 10
-                color: "#505050"
+                Text {
+                    text: qsTr("Drag to turn, scroll to zoom, right-drag to move")
+                    font.pixelSize: 10
+                    color: "#505050"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
         }
     }

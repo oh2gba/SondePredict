@@ -7,9 +7,9 @@ namespace sp {
 
 namespace {
 
-double verticalSpeed(const FlightProfile &profile, FlightPhase phase, double altitude)
+double verticalSpeed(const FlightProfile &profile, FlightPhase phase, double altitude, double ascentScale)
 {
-    return phase == FlightPhase::Ascent ? profile.ascentRate : -profile.descentRate(altitude);
+    return phase == FlightPhase::Ascent ? profile.ascentRateAt(altitude, ascentScale) : -profile.descentRate(altitude);
 }
 
 GeoPoint lerp(GeoPoint a, GeoPoint b, double f)
@@ -29,7 +29,7 @@ double estimatedFlightTime(const FlightProfile &profile, double launchAltitude)
     return ascent + descent;
 }
 
-SimulationResult simulate(const LaunchParams &params, const WindField &field)
+SimulationResult simulate(const LaunchParams &params, const WindSampler &field)
 {
     SimulationResult result;
     if (const char *error = params.profile.validationError(); *error) {
@@ -48,6 +48,7 @@ SimulationResult simulate(const LaunchParams &params, const WindField &field)
     }
     double altitude = params.siteAltitude.value_or(first->groundElevation);
     FlightPhase phase = FlightPhase::Ascent;
+    const double ascentScale = params.profile.ascentScale(altitude);
 
     const auto record = [&](const WindSample &wind) {
         result.track.push_back({t, pos, altitude, wind.u, wind.v, phase});
@@ -59,11 +60,11 @@ SimulationResult simulate(const LaunchParams &params, const WindField &field)
     while (t < end) {
         // Midpoint (RK2) step: wind and vertical speed taken half a step ahead.
         const WindSample w1 = *field.sample(pos, altitude, t, &result.missing);
-        const double z1 = verticalSpeed(params.profile, phase, altitude);
+        const double z1 = verticalSpeed(params.profile, phase, altitude, ascentScale);
         const GeoPoint midPos = offset(pos, w1.v * dt / 2, w1.u * dt / 2);
         const double midAltitude = altitude + z1 * dt / 2;
         const WindSample w2 = *field.sample(midPos, midAltitude, t + dt / 2, &result.missing);
-        const double z2 = verticalSpeed(params.profile, phase, midAltitude);
+        const double z2 = verticalSpeed(params.profile, phase, midAltitude, ascentScale);
 
         const GeoPoint newPos = offset(pos, w2.v * dt, w2.u * dt);
         const double newAltitude = altitude + z2 * dt;

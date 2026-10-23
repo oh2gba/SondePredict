@@ -54,8 +54,9 @@ public:
     {
         ++fetchCount;
         nodesRequested += static_cast<int>(nodes.size());
+        lastHourRequested = std::max(lastHourRequested, lastHour);
         if (fetchCount > failAfter) {
-            QTimer::singleShot(0, [done]() { done(QStringLiteral("simulated network error")); });
+            QTimer::singleShot(0, [this, done]() { done({QStringLiteral("simulated network error"), failWithLimit}); });
             return;
         }
         QTimer::singleShot(0, [this, nodes, firstHour, lastHour, field, done]() {
@@ -67,9 +68,14 @@ public:
         });
     }
 
+    bool extraHoursAreFree() const override { return hoursAreFree; }
+
     int fetchCount = 0;
     int nodesRequested = 0;
+    qint64 lastHourRequested = 0;
+    bool hoursAreFree = true; // like Open-Meteo; false like MEPS
     int failAfter = INT_MAX; // fetches after this many fail
+    bool failWithLimit = false; // ...as "quota used up"
 
 private:
     WindFunction m_wind;

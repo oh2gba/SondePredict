@@ -1,6 +1,7 @@
 #pragma once
 
 #include "batch.h"
+#include "meps.h"
 #include "openmeteo.h"
 #include "predictionstore.h"
 #include "predictor.h"
@@ -25,6 +26,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QSplitter;
+class QPlainTextEdit;
 class QTextBrowser;
 class QTimeEdit;
 class QTreeWidget;
@@ -58,6 +60,8 @@ private:
     void updateCurrentView();
 
     std::shared_ptr<sp::WindField> windField(); // the shared cache, renewed when stale
+    std::vector<sp::WindBackend> windBackends(); // MEPS if enabled, then the global model
+    void logActivity(const QString &line);      // to the Activity tab, log.txt and the terminal
     void runPrediction();
     void onPredictionFinished(const sp::Prediction &prediction);
     void onPredictionFailed(const QString &error);
@@ -71,8 +75,7 @@ private:
     void runDueScheduledBatch();
 
     std::vector<sp::PredictionRecord> selectedRecords() const;
-    void openInGoogleEarth();
-    void exportSelected(bool gpx);
+    void exportGpx();
 
     void deleteSelected();
     void openSettings();
@@ -91,16 +94,19 @@ private:
 
     QNetworkAccessManager m_network;
     std::unique_ptr<sp::OpenMeteoClient> m_client;
+    std::unique_ptr<sp::MepsClient> m_meps;
     std::unique_ptr<sp::Predictor> m_predictor;
     std::unique_ptr<sp::BatchRunner> m_batch;
     bool m_busy = false; // a prediction or batch is running
     bool m_batchScheduled = false;
     int m_batchSaved = 0;
     QStringList m_batchErrors;
+    QString m_batchLimitMessage; // set when the batch stopped at Open-Meteo's limit
     QTimer m_scheduleTimer;
     QDateTime m_nextScheduledRun;
     bool m_scheduledBatchDue = false;
-    std::shared_ptr<sp::WindField> m_field;
+    std::shared_ptr<sp::WindField> m_field;     // global model (latitude/longitude grid)
+    std::shared_ptr<sp::WindField> m_mepsField; // MEPS (its own grid)
     QDateTime m_fieldCreated;
 
     struct PendingRun {
@@ -111,7 +117,6 @@ private:
 
     QTreeWidget *m_tree = nullptr;
     QPushButton *m_deleteButton = nullptr;
-    QPushButton *m_earthButton = nullptr;
     QComboBox *m_siteCombo = nullptr;
     QComboBox *m_homeCombo = nullptr;
     QDateEdit *m_dateEdit = nullptr;
@@ -121,6 +126,8 @@ private:
     QPushButton *m_batchButton = nullptr;
     QCheckBox *m_schedulerCheck = nullptr;
     QTextBrowser *m_details = nullptr;
+    QPlainTextEdit *m_activity = nullptr;   // what predictions and downloads are doing
+    QTabWidget *m_infoTabs = nullptr;       // Details / Activity
     MapWidget *m_map = nullptr;
     QTabWidget *m_views = nullptr;          // Map / 3D / Profile
     Scene3DWidget *m_scene3d = nullptr;     // created when its tab is first opened

@@ -4,12 +4,15 @@ qt_add_library(sp_core STATIC
     flightprofile.cpp flightprofile.h
     geo.cpp geo.h
     landingarea.cpp landingarea.h
+    meps.cpp meps.h
     network.cpp network.h
     openmeteo.cpp openmeteo.h
     predictionstore.cpp predictionstore.h
     predictor.cpp predictor.h
     settings.cpp settings.h
     simulator.cpp simulator.h
+    sitestats.cpp sitestats.h
+    sondehub.cpp sondehub.h
     trackerlog.cpp trackerlog.h
     trackexport.cpp trackexport.h
     v3import.cpp v3import.h

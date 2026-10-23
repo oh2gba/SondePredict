@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPolygonF>
 #include <QTimeZone>
 
 #include <algorithm>
@@ -66,8 +67,7 @@ void ProfileWidget::setPredictions(const std::vector<sp::PredictionRecord> &reco
         m_maxMinutes = std::max(m_maxMinutes, (track.back().time - track.front().time) / 60.0);
         for (const sp::TrackPoint &p : track) {
             m_maxKm = std::max(m_maxKm, p.altitude / 1000.0);
-            if (i == 0)
-                m_maxWind = std::max(m_maxWind, windSpeed(p));
+            m_maxWind = std::max(m_maxWind, windSpeed(p));
         }
     }
     update();
@@ -89,6 +89,7 @@ void ProfileWidget::paintEvent(QPaintEvent *)
         p.drawText(rect(), Qt::AlignCenter, tr("Select a prediction to see its altitude profile."));
         return;
     }
+    const bool single = m_records.size() == 1;
 
     const double minuteStep = niceStep(m_maxMinutes, 8);
     const double kmStep = niceStep(m_maxKm, 6);
@@ -119,10 +120,6 @@ void ProfileWidget::paintEvent(QPaintEvent *)
     }
     QColor windColor = pal.color(QPalette::WindowText);
     windColor.setAlpha(140);
-    for (double w = 0; w <= wMax + 1e-6; w += windStep) {
-        p.setPen(windColor);
-        p.drawText(QRectF(area.right() + 6, pw(w) - 7, 46, 14), Qt::AlignLeft | Qt::AlignVCenter, QString::number(w, 'f', 0));
-    }
     p.setPen(text);
     p.drawText(QRectF(area.left(), area.bottom() + 14, area.width(), 14), Qt::AlignHCenter, tr("minutes after launch"));
     p.save();
@@ -130,32 +127,72 @@ void ProfileWidget::paintEvent(QPaintEvent *)
     p.rotate(-90);
     p.drawText(QRectF(-60, -8, 120, 14), Qt::AlignCenter, tr("altitude (km)"));
     p.restore();
+
+    for (double w = 0; w <= wMax + 1e-6; w += windStep) {
+        p.setPen(windColor);
+        p.drawText(QRectF(area.right() + 6, pw(w) - 7, 46, 14), Qt::AlignLeft | Qt::AlignVCenter, QString::number(w, 'f', 0));
+    }
     p.save();
     p.translate(width() - 8, area.center().y());
     p.rotate(90);
     p.setPen(windColor);
-    p.drawText(QRectF(-60, -8, 120, 14), Qt::AlignCenter, tr("wind (m/s)"));
+    p.drawText(QRectF(-80, -8, 160, 14), Qt::AlignCenter, single ? tr("wind (m/s), arrows: blowing to") : tr("wind (m/s), dotted"));
     p.restore();
+    if (single)
+        paintSingle(p, px, py, pw, windColor);
+    else
+        paintSeveral(p, px, py, pw);
 
-    // Other selected predictions in grey, behind.
-    QColor other = pal.color(QPalette::Mid);
-    other.setAlpha(160);
-    for (std::size_t i = 1; i < m_records.size(); ++i) {
-        const auto &track = m_records[i].prediction.result.track;
-        if (track.empty())
-            continue;
-        QPainterPath path;
-        for (std::size_t k = 0; k < track.size(); ++k) {
-            const QPointF pt(px((track[k].time - track.front().time) / 60.0), py(track[k].altitude / 1000.0));
-            k == 0 ? path.moveTo(pt) : path.lineTo(pt);
+    // Hover readout: the values of every shown prediction at that moment.
+    if (m_hoverMinutes) {
+        const double x = px(*m_hoverMinutes);
+        p.setPen(QPen(pal.color(QPalette::Highlight), 1));
+        p.drawLine(QPointF(x, area.top()), QPointF(x, area.bottom()));
+        QStringList lines;
+        for (std::size_t i = 0; i < m_records.size(); ++i) {
+            const auto &track = m_records[i].prediction.result.track;
+            if (track.empty())
+                continue;
+            const double t = track.front().time + *m_hoverMinutes * 60.0;
+            const auto it = std::lower_bound(track.begin(), track.end(), t,
+                                             [](const sp::TrackPoint &a, double time) { return a.time < time; });
+            if (it == track.end())
+                continue;
+            const QString values = tr("%1 km, wind %2 m/s from %3°").arg(it->altitude / 1000.0, 0, 'f', 1)
+                                       .arg(windSpeed(*it), 0, 'f', 0).arg(qRound(windFrom(*it)));
+            lines << (single ? tr("+%1 min (%2 UTC)  %3").arg(qRound(*m_hoverMinutes)).arg(hhmm(it->time)).arg(values)
+                             : QStringLiteral("%1: %2").arg(label(m_records[i]), values));
         }
-        p.setPen(QPen(other, 1.2));
-        p.drawPath(path);
+        if (!single)
+            lines.prepend(tr("+%1 min after launch").arg(qRound(*m_hoverMinutes)));
+        if (lines.size() > (single ? 0 : 1)) {
+            const QFontMetricsF fm(p.font());
+            double w = 0;
+            for (const QString &line : lines)
+                w = std::max(w, fm.horizontalAdvance(line));
+            const QSizeF size(w + 10, fm.height() * lines.size() + 6);
+            const QPointF at(std::clamp(x + 8, area.left(), area.right() - size.width()), area.top() + 4);
+            p.setPen(Qt::NoPen);
+            p.setBrush(pal.color(QPalette::ToolTipBase));
+            p.drawRoundedRect(QRectF(at, size), 3, 3);
+            p.setPen(pal.color(QPalette::ToolTipText));
+            for (int k = 0; k < lines.size(); ++k)
+                p.drawText(QRectF(at.x() + 5, at.y() + 3 + k * fm.height(), w, fm.height()), Qt::AlignLeft | Qt::AlignVCenter, lines[k]);
+            p.setBrush(Qt::NoBrush);
+        }
     }
+}
 
-    // The current prediction: wind speed (dashed), then the altitude in ascent/descent colours.
+void ProfileWidget::paintSingle(QPainter &p, const std::function<double(double)> &px, const std::function<double(double)> &py,
+                                const std::function<double(double)> &pw, const QColor &windColor)
+{
+    const QRectF area = plotArea();
+    const QColor text = palette().color(QPalette::WindowText);
     const auto &track = m_records.front().prediction.result.track;
     const double t0 = track.front().time;
+
+    // Wind speed (dashed), with arrows pointing where the wind blows to (up = north, as on
+    // the map), about every 40 px.
     QPainterPath wind;
     for (std::size_t k = 0; k < track.size(); ++k) {
         const QPointF pt(px((track[k].time - t0) / 60.0), pw(windSpeed(track[k])));
@@ -164,20 +201,33 @@ void ProfileWidget::paintEvent(QPaintEvent *)
     p.setPen(QPen(windColor, 1.0, Qt::DashLine));
     p.drawPath(wind);
 
+    const double xMax = (px(1.0) - px(0.0)) > 0 ? area.width() / (px(1.0) - px(0.0)) : 1.0;
+    const double arrowSpacingMinutes = std::max(1.0, 40.0 / area.width() * xMax);
+    p.setPen(QPen(windColor, 1.4));
+    p.setBrush(windColor);
+    double nextArrow = arrowSpacingMinutes / 2;
+    for (const sp::TrackPoint &pt : track) {
+        const double minutes = (pt.time - t0) / 60.0;
+        if (minutes < nextArrow)
+            continue;
+        nextArrow += arrowSpacingMinutes;
+        const double speed = windSpeed(pt);
+        if (speed < 0.5)
+            continue;
+        const QPointF centre(px(minutes), pw(speed));
+        const QPointF dir(pt.u / speed, -pt.v / speed); // screen y grows downwards
+        constexpr double half = 7.0, head = 4.0;
+        const QPointF tip = centre + dir * half;
+        const QPointF tail = centre - dir * half;
+        const QPointF side(-dir.y(), dir.x());
+        p.drawLine(tail, tip);
+        p.drawPolygon(QPolygonF{tip, tip - dir * head + side * head * 0.6, tip - dir * head - side * head * 0.6});
+    }
+    p.setBrush(Qt::NoBrush);
+
     for (const auto &[phase, color] : {std::pair{sp::FlightPhase::Ascent, kAscent}, std::pair{sp::FlightPhase::Descent, kDescent}}) {
-        QPainterPath path;
-        bool started = false;
-        for (std::size_t k = 0; k < track.size(); ++k) {
-            const bool burstJoin = phase == sp::FlightPhase::Descent && k + 1 < track.size() && track[k + 1].phase == phase
-                                && track[k].phase != phase; // start the descent at the burst point
-            if (track[k].phase != phase && !burstJoin)
-                continue;
-            const QPointF pt(px((track[k].time - t0) / 60.0), py(track[k].altitude / 1000.0));
-            started ? path.lineTo(pt) : path.moveTo(pt);
-            started = true;
-        }
         p.setPen(QPen(color, 2.2));
-        p.drawPath(path);
+        p.drawPath(phasePath(track, phase, px, py));
     }
 
     const auto &r = m_records.front().prediction.result;
@@ -198,29 +248,115 @@ void ProfileWidget::paintEvent(QPaintEvent *)
         p.setPen(text);
         p.drawText(QRectF(l.x() - 166, l.y() - 18, 160, 14), Qt::AlignRight, tr("Landing %1").arg(hhmm(r.landing->time)));
     }
+    p.setBrush(Qt::NoBrush);
+}
 
-    // Hover readout.
-    if (m_hoverMinutes) {
-        const double t = t0 + *m_hoverMinutes * 60.0;
-        const auto it = std::lower_bound(track.begin(), track.end(), t,
-                                         [](const sp::TrackPoint &a, double time) { return a.time < time; });
-        if (it != track.end()) {
-            const sp::TrackPoint &pt = *it;
-            const double x = px((pt.time - t0) / 60.0);
-            p.setPen(QPen(pal.color(QPalette::Highlight), 1));
-            p.drawLine(QPointF(x, area.top()), QPointF(x, area.bottom()));
-            const QString info = tr("+%1 min (%2 UTC)  %3 km  wind %4 m/s from %5°")
-                                     .arg(qRound((pt.time - t0) / 60.0)).arg(hhmm(pt.time))
-                                     .arg(pt.altitude / 1000.0, 0, 'f', 1).arg(windSpeed(pt), 0, 'f', 0).arg(qRound(windFrom(pt)));
-            const QRectF box = p.fontMetrics().boundingRect(info).adjusted(-5, -3, 5, 3);
-            const QPointF at(std::clamp(x + 8, area.left(), area.right() - box.width()), area.top() + 4);
-            p.setPen(Qt::NoPen);
-            p.setBrush(pal.color(QPalette::ToolTipBase));
-            p.drawRoundedRect(QRectF(at, box.size()), 3, 3);
-            p.setPen(pal.color(QPalette::ToolTipText));
-            p.drawText(QRectF(at, box.size()), Qt::AlignCenter, info);
+void ProfileWidget::paintSeveral(QPainter &p, const std::function<double(double)> &px, const std::function<double(double)> &py,
+                                 const std::function<double(double)> &pw)
+{
+    const QRectF area = plotArea();
+    const QPalette pal = palette();
+    // Launches with the same balloon climb alike; their winds are what differs. Draw those
+    // first, thin and dotted, so the altitude lines stay on top.
+    for (std::size_t i = 0; i < m_records.size(); ++i) {
+        const auto &track = m_records[i].prediction.result.track;
+        if (track.empty())
+            continue;
+        QPainterPath wind;
+        for (std::size_t k = 0; k < track.size(); ++k) {
+            const QPointF pt(px((track[k].time - track.front().time) / 60.0), pw(windSpeed(track[k])));
+            k == 0 ? wind.moveTo(pt) : wind.lineTo(pt);
         }
+        QColor color = seriesColor(i);
+        color.setAlpha(170);
+        p.setPen(QPen(color, 1.3, Qt::DotLine));
+        p.drawPath(wind);
     }
+    for (std::size_t i = 0; i < m_records.size(); ++i) {
+        const auto &track = m_records[i].prediction.result.track;
+        if (track.empty())
+            continue;
+        const QColor color = seriesColor(i);
+        p.setPen(QPen(color, 2.0));
+        p.drawPath(phasePath(track, sp::FlightPhase::Ascent, px, py));
+        p.setPen(QPen(color, 2.0, Qt::DashLine));
+        p.drawPath(phasePath(track, sp::FlightPhase::Descent, px, py));
+
+        const double t0 = track.front().time;
+        const auto &r = m_records[i].prediction.result;
+        p.setPen(QPen(pal.color(QPalette::Base), 1.2));
+        p.setBrush(color);
+        if (r.burst)
+            p.drawEllipse(QPointF(px((r.burst->time - t0) / 60.0), py(r.burst->altitude / 1000.0)), 4.0, 4.0);
+        if (r.landing)
+            p.drawRect(QRectF(QPointF(px((r.landing->time - t0) / 60.0), py(r.landing->altitude / 1000.0)) - QPointF(3.5, 3.5), QSizeF(7, 7)));
+        p.setBrush(Qt::NoBrush);
+    }
+
+    // Legend, top right inside the plot.
+    const QFontMetricsF fm(p.font());
+    constexpr int kMaxRows = 10;
+    const int rows = int(std::min<std::size_t>(m_records.size(), kMaxRows));
+    double w = fm.horizontalAdvance(tr("solid: ascent, dashed: descent, dotted: wind"));
+    for (int i = 0; i < rows; ++i)
+        w = std::max(w, fm.horizontalAdvance(label(m_records[std::size_t(i)])) + 22);
+    const int lineCount = rows + 1 + (m_records.size() > kMaxRows ? 1 : 0);
+    const QRectF box(area.right() - w - 14, area.top() + 4, w + 10, fm.height() * lineCount + 6);
+    QColor background = pal.color(QPalette::Base);
+    background.setAlpha(225);
+    p.setPen(QPen(pal.color(QPalette::Mid), 0.8));
+    p.setBrush(background);
+    p.drawRoundedRect(box, 3, 3);
+    p.setBrush(Qt::NoBrush);
+    for (int i = 0; i < rows; ++i) {
+        const double y = box.top() + 3 + i * fm.height();
+        p.setPen(QPen(seriesColor(std::size_t(i)), 2.5));
+        p.drawLine(QPointF(box.left() + 5, y + fm.height() / 2), QPointF(box.left() + 20, y + fm.height() / 2));
+        p.setPen(pal.color(QPalette::WindowText));
+        p.drawText(QRectF(box.left() + 25, y, w, fm.height()), Qt::AlignLeft | Qt::AlignVCenter, label(m_records[std::size_t(i)]));
+    }
+    p.setPen(pal.color(QPalette::PlaceholderText));
+    double y = box.top() + 3 + rows * fm.height();
+    if (m_records.size() > kMaxRows) {
+        p.drawText(QRectF(box.left() + 25, y, w, fm.height()), Qt::AlignLeft | Qt::AlignVCenter,
+                   tr("and %1 more").arg(m_records.size() - kMaxRows));
+        y += fm.height();
+    }
+    p.drawText(QRectF(box.left() + 5, y, w, fm.height()), Qt::AlignLeft | Qt::AlignVCenter, tr("solid: ascent, dashed: descent, dotted: wind"));
+}
+
+QPainterPath ProfileWidget::phasePath(const std::vector<sp::TrackPoint> &track, sp::FlightPhase phase,
+                                      const std::function<double(double)> &px, const std::function<double(double)> &py)
+{
+    QPainterPath path;
+    bool started = false;
+    const double t0 = track.front().time;
+    for (std::size_t k = 0; k < track.size(); ++k) {
+        const bool burstJoin = phase == sp::FlightPhase::Descent && k + 1 < track.size() && track[k + 1].phase == phase
+                            && track[k].phase != phase; // start the descent at the burst point
+        if (track[k].phase != phase && !burstJoin)
+            continue;
+        const QPointF pt(px((track[k].time - t0) / 60.0), py(track[k].altitude / 1000.0));
+        started ? path.lineTo(pt) : path.moveTo(pt);
+        started = true;
+    }
+    return path;
+}
+
+QColor ProfileWidget::seriesColor(std::size_t index)
+{
+    // Distinct colours that read on light and dark backgrounds.
+    static const QColor colors[] = {QColor(0x1e, 0x88, 0xe5), QColor(0xe5, 0x39, 0x35), QColor(0x43, 0xa0, 0x47),
+                                    QColor(0x8e, 0x24, 0xaa), QColor(0xfb, 0x8c, 0x00), QColor(0x00, 0x89, 0x7b),
+                                    QColor(0xd8, 0x1b, 0x60), QColor(0x79, 0x55, 0x48)};
+    return colors[index % std::size(colors)];
+}
+
+QString ProfileWidget::label(const sp::PredictionRecord &record)
+{
+    return tr("%1 %2 UTC").arg(record.siteName,
+                               QDateTime::fromSecsSinceEpoch(record.prediction.params.launchTime, QTimeZone::UTC)
+                                   .toString(QStringLiteral("dd.MM. HH:mm")));
 }
 
 void ProfileWidget::mouseMoveEvent(QMouseEvent *event)

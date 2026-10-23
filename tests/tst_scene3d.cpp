@@ -2,6 +2,7 @@
 #include "scene3d.h"
 #include "testfields.h"
 
+#include <QDir>
 #include <QSignalSpy>
 #include <QTest>
 
@@ -12,17 +13,18 @@ namespace {
 
 constexpr qint64 kLaunch = 1792753200; // 2026-10-23 11:00 UTC
 
-sp::PredictionRecord record()
+sp::PredictionRecord record(double burst = sp::FlightProfile{}.burstAltitude, qint64 launch = kLaunch)
 {
     sp::WindField field(0.25);
-    sptest::fill(field, {60.0, 22.0}, {62.0, 26.0}, kLaunch / 3600, kLaunch / 3600 + 4, sptest::uniform(0.0, 10.0));
+    sptest::fill(field, {60.0, 22.0}, {62.0, 26.0}, launch / 3600, launch / 3600 + 4, sptest::uniform(0.0, 10.0));
     sp::PredictionRecord rec;
     rec.siteName = QStringLiteral("Jokioinen");
     rec.homeName = QStringLiteral("Home");
     rec.home = sp::GeoPoint{61.0, 23.6};
     rec.prediction.params.site = {60.814, 23.499};
     rec.prediction.params.siteAltitude = 104.0;
-    rec.prediction.params.launchTime = kLaunch;
+    rec.prediction.params.launchTime = launch;
+    rec.prediction.params.profile.burstAltitude = burst;
     rec.prediction.result = sp::simulate(rec.prediction.params, field);
     rec.prediction.landingArea = sp::LandingArea{rec.prediction.result.landing->position, 3000, 1000, 0, 50, {}};
     return rec;
@@ -80,7 +82,7 @@ private slots:
         QCOMPARE(model.areas().size(), 1);
         // launch, burst, landing and home (inside the ground box)
         QCOMPARE(model.markers().size(), 4);
-        QVERIFY(qAbs(model.maxAltitude() - 280.0f) < 0.5f); // 28 km in 100 m units
+        QVERIFY(qAbs(model.maxAltitude() - float(sp::FlightProfile{}.burstAltitude / 100.0)) < 0.5f); // burst height in 100 m units
         // A northward flight: the landing lies at negative z (north) of the launch.
         const QVariantMap track = model.tracks().first().toMap();
         const QVector3D launch = track[QStringLiteral("ascent")].toList().first().value<QVector3D>();
@@ -135,6 +137,14 @@ private slots:
         QVERIFY(!profile.grab().isNull());
         profile.setPredictions({});
         QVERIFY(!profile.grab().isNull());
+
+        // Several predictions, each in its own colour; saved when SP_TEST_SCREENSHOTS is set.
+        profile.resize(900, 360);
+        profile.setPredictions({record(), record(27000, kLaunch + 43200), record(34000, kLaunch + 86400)});
+        const QImage several = profile.grab().toImage();
+        QVERIFY(!several.isNull());
+        if (const QString dir = qEnvironmentVariable("SP_TEST_SCREENSHOTS"); !dir.isEmpty())
+            QVERIFY(several.save(QDir(dir).filePath(QStringLiteral("profile-several.png"))));
     }
 };
 

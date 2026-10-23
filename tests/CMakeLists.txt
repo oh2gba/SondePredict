@@ -21,6 +21,8 @@ sp_add_test(tst_predictionstore)
 sp_add_test(tst_batch)
 sp_add_test(tst_trackexport)
 sp_add_test(tst_landingarea)
+sp_add_test(tst_meps)
+sp_add_test(tst_sitestats)
 
 if(TARGET sp_app)
     sp_add_test(tst_settingsdialog)

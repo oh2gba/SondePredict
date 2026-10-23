@@ -15,6 +15,8 @@
 #include <QMutex>
 #include <QTextStream>
 #include <QPushButton>
+#include <QStyleHints>
+#include <QTabWidget>
 #include <QTimer>
 #include <QTreeWidget>
 
@@ -59,6 +61,9 @@ int main(int argc, char *argv[])
     for (int size : {16, 32, 48, 256})
         icon.addFile(QStringLiteral(":/icons/sondepredict-%1.png").arg(size), QSize(size, size));
     QApplication::setWindowIcon(icon);
+    // Development aid: SP_LIGHT=1 forces the light colour scheme (for consistent screenshots).
+    if (qEnvironmentVariableIsSet("SP_LIGHT"))
+        QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Light);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Radiosonde flight path and landing prediction."));
@@ -107,6 +112,15 @@ int main(int argc, char *argv[])
                 tree->setCurrentItem(tree->topLevelItem(0));
                 tree->topLevelItem(0)->setSelected(true);
             }
+        });
+    }
+    // SP_VIEW=2 or 3 opens the 3D or Profile tab (0 = 2D) and SP_INFO=activity the Activity tab.
+    if (qEnvironmentVariableIsSet("SP_VIEW") || qEnvironmentVariableIsSet("SP_INFO")) {
+        QTimer::singleShot(600, &window, [&window]() {
+            if (auto *views = window.findChild<QTabWidget *>(QStringLiteral("views")); views && qEnvironmentVariableIsSet("SP_VIEW"))
+                views->setCurrentIndex(qEnvironmentVariableIntValue("SP_VIEW"));
+            if (auto *info = window.findChild<QTabWidget *>(QStringLiteral("infoTabs")); info && qEnvironmentVariable("SP_INFO") == QLatin1String("activity"))
+                info->setCurrentIndex(1);
         });
     }
     if (const QString shot = qEnvironmentVariable("SP_SCREENSHOT"); !shot.isEmpty()) {

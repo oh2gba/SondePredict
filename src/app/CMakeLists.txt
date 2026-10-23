@@ -22,6 +22,11 @@ qt_add_resources(sp_app "icons"
         ${PROJECT_SOURCE_DIR}/packaging/icons/sondepredict-32.png
         ${PROJECT_SOURCE_DIR}/packaging/icons/sondepredict-16.png
 )
+# Typical balloon values per launch site, from SondeHub (tools/sondehub_sites.py).
+qt_add_resources(sp_app "data"
+    PREFIX "/"
+    FILES data/launch-sites.json
+)
 # The user manual, shown by Help → User manual.
 file(GLOB SP_MANUAL_IMAGES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/docs/manual/images/*)
 qt_add_resources(sp_app "manual"

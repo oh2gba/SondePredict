@@ -26,15 +26,15 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QSplitter>
-#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QPlainTextEdit>
+#include <QScrollBar>
 #include <QTextBrowser>
 #include <QTimeEdit>
 #include <QTimeZone>
@@ -48,7 +48,12 @@
 namespace {
 
 constexpr int kIdRole = Qt::UserRole;
-constexpr qint64 kCacheMaxAgeSecs = 3600; // GFS updates every 6 h; don't reuse winds for long
+constexpr qint64 kCacheMaxAgeSecs = 3600; // new model runs come every 3–6 h; don't reuse winds for long
+
+QString windModelName(const QString &model)
+{
+    return sp::meps::modelName(model);
+}
 constexpr int kMaxDaysAhead = 15;
 constexpr int kMaxDaysBack = 7;
 
@@ -151,15 +156,10 @@ void MainWindow::buildUi()
     m_deleteButton = new QPushButton(tr("&Delete"));
     m_deleteButton->setEnabled(false);
     connect(m_deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelected);
-    m_earthButton = new QPushButton(tr("&Google Earth"));
-    m_earthButton->setEnabled(false);
-    m_earthButton->setToolTip(tr("Show the selected predictions in Google Earth"));
-    connect(m_earthButton, &QPushButton::clicked, this, &MainWindow::openInGoogleEarth);
 
     auto *treeButtons = new QHBoxLayout;
     treeButtons->addWidget(m_deleteButton);
     treeButtons->addStretch();
-    treeButtons->addWidget(m_earthButton);
     auto *predictionsLayout = new QVBoxLayout(predictionsBox);
     predictionsLayout->addWidget(m_tree);
     predictionsLayout->addLayout(treeButtons);
@@ -224,24 +224,33 @@ void MainWindow::buildUi()
 
     // Right: map above the details.
     m_map = new MapWidget;
-    auto *detailsBox = new QGroupBox(tr("Details"));
     m_details = new QTextBrowser;
     m_details->setOpenExternalLinks(true);
-    auto *detailsLayout = new QVBoxLayout(detailsBox);
-    detailsLayout->addWidget(m_details);
+    m_activity = new QPlainTextEdit;
+    m_activity->setObjectName(QStringLiteral("activity"));
+    m_activity->setReadOnly(true);
+    m_activity->setMaximumBlockCount(5000);
+    m_activity->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+    m_activity->setPlaceholderText(tr("What Sonde Predict does while it predicts appears here: "
+                                      "which wind model and run, the downloads, waits and the result of each pass."));
+    m_infoTabs = new QTabWidget;
+    m_infoTabs->setObjectName(QStringLiteral("infoTabs"));
+    m_infoTabs->setDocumentMode(true);
+    m_infoTabs->addTab(m_details, tr("Details"));
+    m_infoTabs->addTab(m_activity, tr("Activity"));
 
     m_rightSplitter = new QSplitter(Qt::Vertical);
-    // Map, 3D and altitude profile as tabs; the 3D view is built when first opened.
+    // 2D map, 3D view and altitude profile as tabs; the 3D view is built when first opened.
     m_profile = new ProfileWidget;
     m_views = new QTabWidget;
     m_views->setObjectName(QStringLiteral("views"));
     m_views->setDocumentMode(true);
-    m_views->addTab(m_map, tr("Map"));
+    m_views->addTab(m_map, tr("2D"));
     m_views->addTab(new QWidget, tr("3D"));
     m_views->addTab(m_profile, tr("Profile"));
     connect(m_views, &QTabWidget::currentChanged, this, &MainWindow::updateCurrentView);
     m_rightSplitter->addWidget(m_views);
-    m_rightSplitter->addWidget(detailsBox);
+    m_rightSplitter->addWidget(m_infoTabs);
     m_rightSplitter->setStretchFactor(0, 3);
     m_rightSplitter->setStretchFactor(1, 2);
 
@@ -268,8 +277,7 @@ void MainWindow::buildUi()
 void MainWindow::buildMenus()
 {
     QMenu *file = menuBar()->addMenu(tr("&File"));
-    m_selectionActions << file->addAction(tr("Export selected as &KML (Google Earth)..."), this, [this]() { exportSelected(false); });
-    m_selectionActions << file->addAction(tr("Export selected as &GPX (GPS, phone)..."), this, [this]() { exportSelected(true); });
+    m_selectionActions << file->addAction(tr("Export selected as &GPX (GPS, phone)..."), this, &MainWindow::exportGpx);
     file->addSeparator();
     QAction *import = file->addAction(tr("&Import Sonde Predict v3 settings..."), this, &MainWindow::importV3Settings);
     import->setObjectName(QStringLiteral("importAction"));
@@ -357,9 +365,13 @@ void MainWindow::applySettings()
         m_statusLabel->setText(tr("Open-Meteo rate limit reached; continuing in %1 s...").arg(seconds));
     });
     connect(m_client.get(), &sp::OpenMeteoClient::paced, this, [this](int seconds) {
-        m_statusLabel->setText(tr("Spacing out requests to stay within Open-Meteo's free limit; continuing in %1 s…").arg(seconds));
+        m_statusLabel->setText(tr("Spacing out requests to stay within Open-Meteo's free limit; continuing in %1…").arg(sp::openmeteo::describeWait(seconds)));
     });
+    m_meps = std::make_unique<sp::MepsClient>(&m_network);
+    m_client->setLogger([this](const QString &line) { logActivity(line); });
+    m_meps->setLogger([this](const QString &line) { logActivity(line); });
     m_field.reset();
+    m_mepsField.reset();
 
     const bool utc = m_settings.general.useUtc;
     m_timeZoneLabel->setText(utc ? tr("UTC") : QTimeZone::systemTimeZone().displayName(QDateTime::currentDateTime(), QTimeZone::ShortName));
@@ -496,7 +508,6 @@ void MainWindow::onSelectionChanged()
 {
     const QList<qint64> ids = selectedIds();
     m_deleteButton->setEnabled(!ids.isEmpty());
-    m_earthButton->setEnabled(!ids.isEmpty());
     for (QAction *action : m_selectionActions)
         action->setEnabled(!ids.isEmpty());
     if (ids.isEmpty()) {
@@ -610,7 +621,9 @@ void MainWindow::showDetails(const sp::PredictionRecord &rec)
     } else {
         row(tr("Descent"), tr("%1 m/s at sea level, density exponent %2").arg(p.profile.seaLevelDescentRate).arg(p.profile.descentExponent));
     }
-    row(tr("Wind data"), tr("GFS (%1) via Open-Meteo, %2 grid points").arg(rec.model.toHtmlEscaped()).arg(rec.prediction.nodesFetched));
+    const bool meps = rec.model.startsWith(QLatin1String("meps"));
+    const bool openMeteo = rec.model != QLatin1String("meps");
+    row(tr("Wind data"), tr("%1, %2 grid points").arg(windModelName(rec.model).toHtmlEscaped()).arg(rec.prediction.nodesFetched));
     row(tr("Calculated"), formatTime(double(rec.createdAt)) + (rec.manual ? QString() : tr(" (batch)")));
     html += QStringLiteral("</table>");
 
@@ -621,7 +634,12 @@ void MainWindow::showDetails(const sp::PredictionRecord &rec)
     }
     if (r.aboveTopLevel)
         html += tr("<p><i>The flight went above the highest forecast level (10 hPa, about 31 km); the wind there was held constant.</i></p>");
-    html += tr("<p style=\"color:palette(mid)\"><small>Weather data by <a href=\"https://open-meteo.com/\">Open-Meteo.com</a> (CC BY 4.0).</small></p>");
+    QStringList credits;
+    if (meps)
+        credits << tr("MEPS from <a href=\"https://www.met.no/\">MET Norway</a>");
+    if (openMeteo)
+        credits << tr("<a href=\"https://open-meteo.com/\">Open-Meteo.com</a>");
+    html += tr("<p style=\"color:palette(mid)\"><small>Weather data: %1 (CC BY 4.0).</small></p>").arg(credits.join(tr(" and ")));
     m_details->setHtml(html);
 }
 
@@ -639,10 +657,30 @@ std::shared_ptr<sp::WindField> MainWindow::windField()
     const QDateTime nowUtc = QDateTime::currentDateTimeUtc();
     if (!m_field || m_field->gridStep() != m_settings.wind.gridStep || m_fieldCreated.secsTo(nowUtc) > kCacheMaxAgeSecs) {
         m_field = std::make_shared<sp::WindField>(m_settings.wind.gridStep);
+        m_mepsField = std::make_shared<sp::WindField>(m_meps->geometry());
         m_fieldCreated = nowUtc;
         m_predictor.reset();
     }
     return m_field;
+}
+
+void MainWindow::logActivity(const QString &line)
+{
+    qInfo().noquote() << line;
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    const QString time = (m_settings.general.useUtc ? now : now.toLocalTime()).toString(QStringLiteral("HH:mm:ss"));
+    QScrollBar *bar = m_activity->verticalScrollBar();
+    const bool atEnd = bar->value() >= bar->maximum() - 2; // keep following unless the user scrolled up
+    m_activity->appendPlainText(time + QStringLiteral("  ") + line);
+    if (atEnd)
+        bar->setValue(bar->maximum());
+}
+
+std::vector<sp::WindBackend> MainWindow::windBackends()
+{
+    windField();
+    return sp::meps::standardBackends(m_meps.get(), m_mepsField, m_client.get(), m_field, m_settings.wind.model,
+                                      m_settings.wind.useMeps, m_settings.wind.averageMeps);
 }
 
 void MainWindow::runPrediction()
@@ -657,7 +695,7 @@ void MainWindow::runPrediction()
         return;
     const qint64 now = QDateTime::currentSecsSinceEpoch();
     if (launch->toSecsSinceEpoch() > now + kMaxDaysAhead * 86400LL) {
-        QMessageBox::information(this, tr("New prediction"), tr("GFS forecasts reach about %1 days ahead.").arg(kMaxDaysAhead));
+        QMessageBox::information(this, tr("New prediction"), tr("Forecasts reach about %1 days ahead.").arg(kMaxDaysAhead));
         return;
     }
 
@@ -669,17 +707,18 @@ void MainWindow::runPrediction()
     params.site = site->position;
     params.siteAltitude = site->altitude;
     params.launchTime = launch->toSecsSinceEpoch();
-    params.profile = m_settings.profile;
+    params.profile = m_settings.profileFor(site); // the site's own balloon values, if it has them
 
     windField();
     if (!m_predictor) {
-        m_predictor = std::make_unique<sp::Predictor>(m_client.get(), m_field);
-        m_predictor->setSpread(m_settings.spread);
+        m_predictor = std::make_unique<sp::Predictor>(windBackends());
         connect(m_predictor.get(), &sp::Predictor::progress, this, [this](const QString &message) { m_statusLabel->setText(message + u'…'); });
+        connect(m_predictor.get(), &sp::Predictor::activity, this, &MainWindow::logActivity);
         connect(m_predictor.get(), &sp::Predictor::finished, this, &MainWindow::onPredictionFinished);
         connect(m_predictor.get(), &sp::Predictor::failed, this, &MainWindow::onPredictionFailed);
     }
 
+    m_predictor->setSpread(m_settings.spreadFor(site));
     setBusy(true, tr("Starting prediction for %1…").arg(site->name));
     m_predictor->start(params);
 }
@@ -692,7 +731,7 @@ void MainWindow::onPredictionFinished(const sp::Prediction &prediction)
     record.homeName = m_pending.homeName;
     record.home = m_pending.home;
     record.manual = true;
-    record.model = m_settings.wind.model;
+    record.model = prediction.model;
     record.prediction = prediction;
 
     const qint64 id = m_store.isOpen() ? m_store.save(record, m_settings.general.overwritePredictions) : 0;
@@ -704,9 +743,13 @@ void MainWindow::onPredictionFinished(const sp::Prediction &prediction)
         return;
     }
     refreshTree(id);
+    m_infoTabs->setCurrentWidget(m_details);
     const sp::TrackPoint &land = *prediction.result.landing;
-    m_statusLabel->setText(record.home ? tr("Landing %1 from %2").arg(km(sp::inverse(*record.home, land.position).distance), record.homeName)
-                                       : tr("Prediction done"));
+    QString status = record.home ? tr("Landing %1 from %2").arg(km(sp::inverse(*record.home, land.position).distance), record.homeName)
+                                 : tr("Prediction done");
+    if (!prediction.fallbackNote.isEmpty())
+        status += tr(" (%1 used: %2)").arg(windModelName(prediction.model), prediction.fallbackNote);
+    m_statusLabel->setText(status);
 }
 
 void MainWindow::onPredictionFailed(const QString &error)
@@ -724,6 +767,8 @@ bool MainWindow::isBusy() const
 
 void MainWindow::setBusy(bool busy, const QString &message)
 {
+    if (busy && !m_busy)
+        m_infoTabs->setCurrentWidget(m_activity); // follow what it is doing
     m_busy = busy;
     m_progress->setVisible(busy);
     m_runButton->setText(busy ? tr("&Stop") : tr("&Start"));
@@ -745,6 +790,8 @@ void MainWindow::stopRunning()
         m_batch->cancel();
         refreshTree(selectedIds().value(0)); // show what the batch saved so far
     }
+    if (m_busy)
+        logActivity(tr("Stopped"));
     setBusy(false, tr("Stopped"));
 }
 
@@ -816,13 +863,17 @@ void MainWindow::startBatch(bool scheduled)
         return;
     }
 
-    m_batch = std::make_unique<sp::BatchRunner>(m_client.get(), windField());
+    m_batch = std::make_unique<sp::BatchRunner>(windBackends());
     m_batch->setSpread(m_settings.spread);
     m_batchScheduled = scheduled;
     m_batchSaved = 0;
     m_batchErrors.clear();
+    m_batchLimitMessage.clear();
+    connect(m_batch.get(), &sp::BatchRunner::activity, this, &MainWindow::logActivity);
     connect(m_batch.get(), &sp::BatchRunner::jobStarted, this, [this](int index, int total, const sp::BatchJob &job) {
-        m_statusLabel->setText(tr("Batch %1/%2: %3 %4…").arg(index + 1).arg(total).arg(job.siteName, formatTime(double(job.params.launchTime))));
+        const QString text = tr("Batch %1/%2: %3 %4").arg(index + 1).arg(total).arg(job.siteName, formatTime(double(job.params.launchTime)));
+        m_statusLabel->setText(text + u'…');
+        logActivity(QStringLiteral("── ") + text);
     });
     connect(m_batch.get(), &sp::BatchRunner::jobFinished, this,
             [this](int, const sp::BatchJob &job, const sp::Prediction &prediction) { onBatchJobFinished(job, prediction); });
@@ -830,19 +881,30 @@ void MainWindow::startBatch(bool scheduled)
         m_batchErrors << QStringLiteral("%1: %2").arg(formatTime(double(job.params.launchTime)), error);
         qWarning().noquote() << "Batch prediction failed:" << m_batchErrors.last();
     });
+    connect(m_batch.get(), &sp::BatchRunner::limitReached, this, [this](int skipped, const QString &message) {
+        m_batchLimitMessage = tr("%1. The batch stopped; %2 not predicted.")
+                                  .arg(message, counted(skipped + 1, tr("%1 launch was"), tr("%1 launches were")));
+        qWarning().noquote() << "Batch stopped:" << m_batchLimitMessage;
+    });
     connect(m_batch.get(), &sp::BatchRunner::finished, this, [this](int succeeded, int failed) {
         setBusy(false, tr("Batch done: %1 saved").arg(predictions(m_batchSaved))
                            + (failed ? tr(", %1 failed").arg(failed) : QString()));
-        qInfo() << "Batch done:" << succeeded << "succeeded," << failed << "failed";
+        logActivity(tr("Batch done: %1 saved, %2 failed").arg(succeeded).arg(failed));
         refreshTree();
-        if (!m_batchErrors.isEmpty() && !m_batchScheduled) {
+        if (!m_batchLimitMessage.isEmpty()) {
+            m_statusLabel->setText(tr("Batch stopped: %1 saved; Open-Meteo's limit is used up").arg(predictions(m_batchSaved)));
+            if (!m_batchScheduled) {
+                const QString text = tr("%1 saved.\n\n%2").arg(predictions(m_batchSaved), m_batchLimitMessage);
+                QTimer::singleShot(0, this, [this, text]() { QMessageBox::information(this, tr("Batch"), text); });
+            }
+        } else if (!m_batchErrors.isEmpty() && !m_batchScheduled) {
             const QString text = tr("%1 did not work:").arg(predictions(int(m_batchErrors.size()))) + u'\n'
                                + m_batchErrors.mid(0, 5).join(u'\n');
             QTimer::singleShot(0, this, [this, text]() { QMessageBox::warning(this, tr("Batch"), text); });
         }
     });
 
-    qInfo() << "Batch started:" << plan.jobs.size() << "predictions" << (scheduled ? "(scheduled)" : "");
+    logActivity(tr("Batch started: %1%2").arg(predictions(int(plan.jobs.size())), scheduled ? tr(" (scheduled)") : QString()));
     setBusy(true, tr("Starting a batch of %1…").arg(predictions(int(plan.jobs.size()))));
     m_batch->start(plan.jobs);
 }
@@ -854,7 +916,7 @@ void MainWindow::onBatchJobFinished(const sp::BatchJob &job, const sp::Predictio
     record.homeName = job.homeName;
     record.home = job.home;
     record.manual = false;
-    record.model = m_settings.wind.model;
+    record.model = prediction.model;
     record.prediction = prediction;
     if (m_store.isOpen() && m_store.save(record, m_settings.general.overwritePredictions)) {
         ++m_batchSaved;
@@ -875,34 +937,7 @@ std::vector<sp::PredictionRecord> MainWindow::selectedRecords() const
     return records;
 }
 
-void MainWindow::openInGoogleEarth()
-{
-    const auto records = selectedRecords();
-    if (records.empty())
-        return;
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/kml");
-    QDir().mkpath(dir);
-    const QString path = QDir(dir).filePath(QStringLiteral("sondepredict-%1.kml")
-                                                .arg(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss"))));
-    if (const QString error = sp::writeFile(path, sp::toKml(records)); !error.isEmpty()) {
-        QMessageBox::warning(this, tr("Google Earth"), error);
-        return;
-    }
-
-    const QString earth = m_settings.general.googleEarthPath;
-    const bool started = !earth.isEmpty() && QFileInfo(earth).isExecutable()
-        ? QProcess::startDetached(earth, {QDir::toNativeSeparators(path)})
-        : QDesktopServices::openUrl(QUrl::fromLocalFile(path));
-    if (!started) {
-        QMessageBox::information(this, tr("Google Earth"),
-                                 tr("No program opened the KML file. Install Google Earth Pro, or set its path in "
-                                    "Settings → General.\n\nThe file was saved as %1").arg(QDir::toNativeSeparators(path)));
-    } else {
-        m_statusLabel->setText(tr("Opened %1 in Google Earth").arg(predictions(int(records.size()))));
-    }
-}
-
-void MainWindow::exportSelected(bool gpx)
+void MainWindow::exportGpx()
 {
     const auto records = selectedRecords();
     if (records.empty())
@@ -911,13 +946,12 @@ void MainWindow::exportSelected(bool gpx)
     QString name = QStringLiteral("%1-%2").arg(first.siteName, QDateTime::fromSecsSinceEpoch(first.prediction.params.launchTime, QTimeZone::UTC)
                                                                    .toString(QStringLiteral("yyyy-MM-dd-HHmm")));
     name.replace(QRegularExpression(QStringLiteral("[^\\w.-]+")), QStringLiteral("_"));
-    const QString suffix = gpx ? QStringLiteral("gpx") : QStringLiteral("kml");
-    const QString path = QFileDialog::getSaveFileName(this, gpx ? tr("Export GPX") : tr("Export KML"),
-                                                      QDir(QDir::homePath()).filePath(name + u'.' + suffix),
-                                                      gpx ? tr("GPX files (*.gpx)") : tr("KML files (*.kml)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export GPX"),
+                                                      QDir(QDir::homePath()).filePath(name + QStringLiteral(".gpx")),
+                                                      tr("GPX files (*.gpx)"));
     if (path.isEmpty())
         return;
-    if (const QString error = sp::writeFile(path, gpx ? sp::toGpx(records) : sp::toKml(records)); !error.isEmpty())
+    if (const QString error = sp::writeFile(path, sp::toGpx(records)); !error.isEmpty())
         QMessageBox::warning(this, tr("Export"), error);
     else
         m_statusLabel->setText(tr("Saved %1").arg(QDir::toNativeSeparators(path)));
@@ -977,10 +1011,12 @@ void MainWindow::showAbout()
 {
     QMessageBox::about(this, tr("About Sonde Predict"),
                        tr("<h3>Sonde Predict %1</h3>"
-                          "<p>Predicts radiosonde flight paths and landing points from GFS upper-air winds.</p>"
+                          "<p>Predicts radiosonde flight paths and landing points from upper-air wind forecasts.</p>"
                           "<p>A rewrite of Sonde Predict v3 (2016–2022).</p>"
-                          "<p>Weather data by <a href=\"https://open-meteo.com/\">Open-Meteo.com</a> (CC BY 4.0), "
-                          "from NOAA GFS. Map data © <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors.</p>"
+                          "<p>Weather data: MEPS from <a href=\"https://www.met.no/\">MET Norway</a> (CC BY 4.0) in the Nordic area; "
+                          "global models by <a href=\"https://open-meteo.com/\">Open-Meteo.com</a> (CC BY 4.0). "
+                          "Typical balloon values per launch site from <a href=\"https://sondehub.org/\">SondeHub</a>. "
+                          "Map data © <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors.</p>"
                           "<p>Free software under the GNU General Public License v3.0. Source and downloads: "
                           "<a href=\"https://github.com/oh2gba/SondePredict\">github.com/oh2gba/SondePredict</a></p>")
                            .arg(QApplication::applicationVersion()));

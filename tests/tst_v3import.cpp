@@ -95,14 +95,14 @@ private slots:
 
         QCOMPARE(s.network.proxyMode, sp::ProxyMode::Manual);
         QCOMPARE(s.network.proxyUrl, QStringLiteral("http://proxy.example.com:8080/"));
-        QCOMPARE(s.general.googleEarthPath, QStringLiteral("C:\\Program Files\\Google\\Google Earth\\client\\googleearth.exe"));
         QCOMPARE(s.general.useUtc, false);
 
         QVERIFY(r.scheduleImported);
-        QCOMPARE(s.schedule->siteName, QStringLiteral("Jokioinen"));
+        QCOMPARE(s.schedule->sites.size(), 1);
+        QCOMPARE(s.schedule->sites[0].siteName, QStringLiteral("Jokioinen"));
         QCOMPARE(s.schedule->homeName, QStringLiteral("Cabin"));
         QCOMPARE(s.schedule->days, (QList<int>{0, 1, 2}));
-        QCOMPARE(s.schedule->hours, (QList<int>{11, 23}));
+        QCOMPARE(s.schedule->sites[0].times, (QList<QTime>{QTime(11, 30), QTime(23, 30)}));
         QCOMPARE(s.schedule->intervalHours, 6);
 
         QCOMPARE(s.manualRun.siteName, QStringLiteral("Jokioinen"));

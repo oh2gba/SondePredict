@@ -46,7 +46,7 @@ struct SimulationResult {
 
 // Flies the balloon through `field`. Missing wind nodes are approximated by the nearest
 // loaded node and listed in `missing`, so the caller can fetch them and fly again.
-SimulationResult simulate(const LaunchParams &params, const WindField &field);
+SimulationResult simulate(const LaunchParams &params, const WindSampler &field);
 
 // Flight duration in seconds from the vertical profile alone (no wind needed); used to
 // decide which forecast hours to fetch. Assumes landing at the launch altitude.

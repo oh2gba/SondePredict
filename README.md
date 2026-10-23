@@ -1,9 +1,10 @@
 # Sonde Predict
 
-Predicts where a radiosonde will land after its weather balloon bursts, from GFS upper-air
-winds, so you can tell at a glance whether a launch is worth hunting. Shows the track, burst,
+Predicts where a radiosonde will land after its weather balloon bursts, from upper-air wind
+forecasts (MET Norway's MEPS in the Nordic area, ECMWF or another global model elsewhere), so you can tell at a glance whether a launch is worth hunting. Shows the track, burst,
 landing point and a 95% landing area on a map, with the distance and direction from your own
-location; batch predictions for several days, Google Earth (KML) and GPS/phone (GPX) export.
+location, in 3D over the map and as an altitude profile; batch predictions for several days and
+GPS/phone (GPX) export.
 
 ![Sonde Predict](docs/manual/images/main-window.jpg)
 
@@ -73,16 +74,21 @@ Coming from v3? Import your old settings once, then use location names:
 ```
 
 `--locations` lists saved locations and `--list` the saved predictions. `--batch` runs the batch
-set up in the app, `--kml` / `--gpx` write the result for Google Earth or GPS apps, and
-`--export 3,5 --kml out.kml` exports stored predictions. Settings live in
+set up in the app, `--gpx` writes the result for GPS apps, and
+`--export 3,5 --gpx out.gpx` exports stored predictions. Settings live in
 `~/.config/SondePredict/sondepredict.ini` (Windows: `%LOCALAPPDATA%\SondePredict`), predictions
 in `~/.local/share/SondePredict/predictions.sqlite`.
 
-Wind data comes from the free [Open-Meteo](https://open-meteo.com) GFS API (non-commercial
-use; see the quota note in PLAN.md).
+Wind data: in the Nordic countries and the Baltic, MEPS (2.5 km, 65 model levels) straight from
+[MET Norway's THREDDS server](https://thredds.met.no/) (free, no quota), averaged with a global
+model (ECMWF IFS by default) from the free [Open-Meteo](https://open-meteo.com) API
+(non-commercial use; see the quota note in PLAN.md); elsewhere and beyond 66 hours, the global
+model alone. How the models compare with real
+soundings is in [tools/validation](tools/validation/README.md).
 
 ## Licence
 
 Sonde Predict is free software under the [GNU General Public License v3.0](LICENSE).
-Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0); map data ©
+Weather data: MEPS by [MET Norway](https://www.met.no/) (CC BY 4.0); global models by
+[Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0); map data ©
 [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.

@@ -11,9 +11,10 @@ namespace sp {
 // How much real flights differ from the configured balloon (one standard deviation).
 struct FlightSpread {
     bool enabled = true;
-    double ascentRate = 0.4;     // m/s
-    double burstAltitude = 1500; // m
-    double descentRate = 0.10;   // fraction of the descent speed
+    // Defaults: the spread of Jokioinen flights on SondeHub (robust, 2026).
+    double ascentRate = 0.35;    // m/s
+    double burstAltitude = 2500; // m
+    double descentRate = 0.18;   // fraction of the descent speed (fitted descents: ± 18 %)
     int samples = 50;
 };
 
@@ -41,6 +42,6 @@ struct LandingAreaResult {
 
 // Deterministic (fixed seed): the same inputs always give the same area. Varied flights use
 // a 5 s time step, which moves landings by metres, not kilometres.
-LandingAreaResult estimateLandingArea(const LaunchParams &params, const WindField &field, const FlightSpread &spread);
+LandingAreaResult estimateLandingArea(const LaunchParams &params, const WindSampler &field, const FlightSpread &spread);
 
 } // namespace sp

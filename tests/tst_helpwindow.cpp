@@ -94,6 +94,8 @@ private slots:
         browserOf(window)->scrollToAnchor(QStringLiteral("reading-a-prediction"));
         QTest::qWait(100);
         QVERIFY(window.grab().save(QDir(dir).filePath(QStringLiteral("help-window.png"))));
+        // The PDF that ships in docs/manual.
+        QCOMPARE(HelpWindow::writePdf(QDir(dir).filePath(QStringLiteral("user-manual.pdf"))), QString());
     }
 };
 
