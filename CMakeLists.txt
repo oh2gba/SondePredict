@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(SondePredict
-    VERSION 5.0.2
+    VERSION 5.1.0
     DESCRIPTION "Radiosonde flight path and landing prediction"
     LANGUAGES CXX)
 

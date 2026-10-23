@@ -11,6 +11,8 @@ aqtinstall.log
 
 # Original backup archive (kept locally, too large for git)
 /Sondepredict_files.7z
+# FMI soundings used by tools/validation (kept locally, not ours to publish)
+/soundings_*.7z
 
 # Editors
 .idea/

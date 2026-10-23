@@ -64,8 +64,8 @@
     </article>
     <article>
       <h3>A landing area, not just a point</h3>
-      <p>Fifty varied flights show where the sonde will most likely come down, as an ellipse on the
-        map, so you can see how sure the prediction is.</p>
+      <p>Fifty varied flights, each with a wind error as large as the forecasts' real errors, show
+        where the sonde will come down. Checked on real flights: about 95&nbsp;% land inside the 95&nbsp;% area.</p>
     </article>
     <article>
       <h3>Every station you follow</h3>
@@ -75,7 +75,7 @@
     <article>
       <h3>Out in the field</h3>
       <p>Export to GPS and phone apps as GPX, run it from the command line, and read what it is
-        doing line by line in the activity log.</p>
+        doing line by line in the activity log. It tells you when a new version is out.</p>
     </article>
   </div>
 </section>
@@ -110,13 +110,16 @@
   </table>
   </div>
   <p>Balloons from one station vary (burst altitudes 31–36 km at Jokioinen), and the forecast
-    is never perfect, so the landing area matters as much as the point. The full comparison —
-    against soundings, by forecast lead time and per wind model — is
+    is never perfect, so the landing area matters as much as the point. Other stations were
+    checked the same way: Tallinn 5&nbsp;km, Stavanger 6&nbsp;km typical error; stations with slow parachute
+    descents drift longer and are harder (Greifswald about 22&nbsp;km), and their landing areas are
+    larger to match. The full comparison — against soundings, by forecast lead time, per wind
+    model and per station — is
     <a href="https://github.com/oh2gba/SondePredict/blob/main/tools/validation/README.md">in the source</a>.</p>
   <div class="facts">
-    <div><span class="num">2–6 %</span><span>better winds from averaging MEPS and ECMWF, at every lead time</span></div>
+    <div><span class="num">95 %</span><span>of real landings inside the 95 % landing area, once forecast errors are included</span></div>
     <div><span class="num">−13 %</span><span>slower climb at 9–18 km, as real balloons do; now part of the flight model</span></div>
-    <div><span class="num">320</span><span>launch sites with typical balloon values from SondeHub, refreshed from their last 30 days</span></div>
+    <div><span class="num">22</span><span>stations with descents measured on their own flights; 320 launch sites with typical values from SondeHub</span></div>
   </div>
 </section>
 
@@ -137,7 +140,7 @@
       <li><span>2016</span> Sonde Predict, up to v3: Python 2.7, wxPython, GFS GRIB, Google Earth.</li>
       <li><span>2022</span> Last build of v3.</li>
       <li><span>2026</span> Sonde Predict 5: rewritten from the recovered source; map, 3D, profile, Windows and Linux.</li>
-      <li><span>2026</span> MEPS + ECMWF winds, validation against soundings and real flights, multi-site batches.</li>
+      <li><span>2026</span> Sonde Predict 5.1: MEPS + ECMWF winds, a flight model and landing area checked against real flights, multi-site batches.</li>
     </ol>
   </div>
 </section>

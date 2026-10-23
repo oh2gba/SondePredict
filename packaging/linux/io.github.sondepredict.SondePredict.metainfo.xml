@@ -14,5 +14,23 @@
     <category>Science</category>
     <category>HamRadio</category>
   </categories>
+  <url type="homepage">https://oh2gba.github.io/SondePredict/</url>
+  <url type="vcs-browser">https://github.com/oh2gba/SondePredict</url>
   <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="5.1.0" date="2026-10-23">
+      <description>
+        <p>Better winds and a flight model checked against real flights:</p>
+        <ul>
+          <li>MET Norway's MEPS (2.5 km, 65 model levels) averaged with ECMWF in the Nordic area; ECMWF elsewhere</li>
+          <li>Balloon defaults, ascent shape and descent fitted to hundreds of SondeHub flights</li>
+          <li>Typical values for 320 launch sites, with measured descents for 22 stations</li>
+          <li>A landing area that includes forecast uncertainty, calibrated on real landings</li>
+          <li>Batches over several launch sites, each with its own launch times and balloon</li>
+          <li>Activity log, profile of several flights, update check</li>
+        </ul>
+      </description>
+    </release>
+    <release version="5.0.2" date="2026-10-22"/>
+  </releases>
 </component>
