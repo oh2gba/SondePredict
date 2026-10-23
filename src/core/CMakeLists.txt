@@ -15,6 +15,7 @@ qt_add_library(sp_core STATIC
     sondehub.cpp sondehub.h
     trackerlog.cpp trackerlog.h
     trackexport.cpp trackexport.h
+    updatecheck.cpp updatecheck.h
     v3import.cpp v3import.h
     windfield.cpp windfield.h
     windsource.h

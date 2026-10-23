@@ -128,6 +128,7 @@ private:
 
     QCheckBox *m_overwrite = nullptr;
     QCheckBox *m_useUtc = nullptr;
+    QCheckBox *m_updateCheck = nullptr;
 
     QTabWidget *m_tabs = nullptr;
     QWidget *m_batchPage = nullptr;

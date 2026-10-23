@@ -23,6 +23,7 @@ sp_add_test(tst_trackexport)
 sp_add_test(tst_landingarea)
 sp_add_test(tst_meps)
 sp_add_test(tst_sitestats)
+sp_add_test(tst_updatecheck)
 
 if(TARGET sp_app)
     sp_add_test(tst_settingsdialog)

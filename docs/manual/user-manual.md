@@ -96,8 +96,10 @@ The window has the same layout as v3, with a map added.
   and model run it uses, each download with its size and time, waits for the free quota or a busy
   server, each pass of the calculation and the result. It comes to the front while a prediction or
   batch runs; the same lines go to the log file (**Help → Open log file**).
-* **Status bar**: what Sonde Predict is doing, a progress bar while it works, and the current
-  UTC time.
+* **Status bar**: what Sonde Predict is doing, a progress bar while it works, a small
+  *Version … available* link when the update check finds a newer version (click it for the
+  download page), and
+  the current UTC time.
 
 ![All predictions of one day selected](images/day-selected.jpg)
 
@@ -334,6 +336,8 @@ See [Batch predictions and the scheduler](#batch-predictions-and-the-scheduler).
   enter an address such as `http://proxy.example.com:8080` (with `user:password@` in front of the
   host name if the proxy needs a login) if your network requires a proxy that the system does not
   know about.
+* **Update check**: on by default. When a new version of Sonde Predict is out, a small link
+  appears in the status bar. **Help → Run the update check** looks right away.
 
 ## Choosing the balloon settings
 

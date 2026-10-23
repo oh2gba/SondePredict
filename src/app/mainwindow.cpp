@@ -137,6 +137,14 @@ MainWindow::MainWindow(QString configPath, QString dbPath, QWidget *parent)
     });
     updateBatchControls();
     updateScheduleTimer();
+
+    // Ask once soon after start, then every 24 hours while the program runs.
+    connect(&m_updateCheck, &sp::UpdateCheck::finished, this, &MainWindow::onUpdateCheckFinished);
+    m_updateCheckTimer.setTimerType(Qt::VeryCoarseTimer);
+    m_updateCheckTimer.setInterval(24 * 60 * 60 * 1000);
+    connect(&m_updateCheckTimer, &QTimer::timeout, this, [this]() { runUpdateCheck(); });
+    m_updateCheckTimer.start();
+    QTimer::singleShot(3000, this, [this]() { runUpdateCheck(); });
     m_clockLabel->setText(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss 'UTC'")));
 }
 
@@ -269,8 +277,14 @@ void MainWindow::buildUi()
     m_progress->setMaximumWidth(160);
     m_progress->setVisible(false);
     m_clockLabel = new QLabel;
+    m_updateLabel = new QLabel;
+    m_updateLabel->setObjectName(QStringLiteral("updateLabel"));
+    m_updateLabel->setTextFormat(Qt::RichText);
+    m_updateLabel->setOpenExternalLinks(true);
+    m_updateLabel->hide();
     statusBar()->addWidget(m_statusLabel, 1);
     statusBar()->addPermanentWidget(m_progress);
+    statusBar()->addPermanentWidget(m_updateLabel);
     statusBar()->addPermanentWidget(m_clockLabel);
 }
 
@@ -307,6 +321,7 @@ void MainWindow::buildMenus()
         if (!QFileInfo::exists(log) || !QDesktopServices::openUrl(QUrl::fromLocalFile(log)))
             QMessageBox::information(this, tr("Log file"), tr("The log file is %1").arg(QDir::toNativeSeparators(log)));
     });
+    help->addAction(tr("Run the &update check"), this, [this]() { runUpdateCheck(true); });
     help->addSeparator();
     help->addAction(tr("&About Sonde Predict"), this, &MainWindow::showAbout);
     help->addAction(tr("About &Qt"), qApp, &QApplication::aboutQt);
@@ -977,12 +992,15 @@ void MainWindow::openSettings()
     SettingsDialog dialog(m_settings, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
+    const bool updateCheckWasOn = m_settings.general.updateCheck;
     m_settings = dialog.settings();
     saveSettings();
     applySettings();
     refreshLocationCombos();
     refreshTree(selectedIds().value(0));
     updateScheduleTimer();
+    if (m_settings.general.updateCheck != updateCheckWasOn)
+        runUpdateCheck(); // switched on: ask now; switched off: the link goes
 }
 
 void MainWindow::importV3Settings()
@@ -1020,4 +1038,64 @@ void MainWindow::showAbout()
                           "<p>Free software under the GNU General Public License v3.0. Source and downloads: "
                           "<a href=\"https://github.com/oh2gba/SondePredict\">github.com/oh2gba/SondePredict</a></p>")
                            .arg(QApplication::applicationVersion()));
+}
+
+void MainWindow::runUpdateCheck(bool manual)
+{
+    if (!m_settings.general.updateCheck) {
+        m_updateLabel->hide();
+        if (manual)
+            QMessageBox::information(this, tr("Update check"), tr("The update check is switched off in Settings → General."));
+        return;
+    }
+    m_manualUpdateCheck = m_manualUpdateCheck || manual;
+    if (manual)
+        m_statusLabel->setText(tr("Running the update check..."));
+    m_updateCheck.run(updateCheckUrl());
+}
+
+QUrl MainWindow::updateCheckUrl() const
+{
+    return QUrl(m_settings.general.updateCheckUrl.isEmpty() ? QString::fromLatin1(sp::UpdateCheck::defaultUrl)
+                                                       : m_settings.general.updateCheckUrl);
+}
+
+void MainWindow::onUpdateCheckFinished(const sp::UpdateCheck::Result &r)
+{
+    const QString current = QApplication::applicationVersion();
+    const QString note = r.message.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(r.message);
+    QString answer;
+    if (!r.valid)
+        answer = tr("could not reach %1.").arg(updateCheckUrl().host());
+    else if (r.newer)
+        answer = tr("Sonde Predict %1 is available; this is %2.").arg(r.latest, current) + note;
+    else
+        answer = tr("Sonde Predict %1 is the current version.").arg(current) + note;
+    logActivity(tr("Update check: %1").arg(answer));
+    if (m_manualUpdateCheck) {
+        // asked for by hand: say what came back, also when there is nothing new
+        m_manualUpdateCheck = false;
+        const QString sentence = r.valid ? answer : tr("Update check: could not reach %1.").arg(updateCheckUrl().host());
+        m_statusLabel->setText(sentence);
+        QString text = sentence.toHtmlEscaped();
+        if (r.newer && !r.url.isEmpty())
+            text += QStringLiteral("<p><a href=\"%1\">%2</a></p>").arg(r.url.toHtmlEscaped(), tr("Download page"));
+        QTimer::singleShot(0, this, [this, text]() { QMessageBox::information(this, tr("Update check"), text); });
+    }
+
+    // The status bar shows a newer version and any note from the project; nothing otherwise.
+    QString text;
+    if (r.valid && r.newer)
+        text = tr("Version %1 available").arg(r.latest);
+    if (r.valid && !r.message.isEmpty())
+        text += (text.isEmpty() ? QString() : QStringLiteral(" · ")) + r.message.toHtmlEscaped();
+    if (text.isEmpty()) {
+        m_updateLabel->hide();
+        return;
+    }
+    if (!r.url.isEmpty())
+        text = QStringLiteral("<a href=\"%1\">%2</a>").arg(r.url.toHtmlEscaped(), text);
+    m_updateLabel->setText(text);
+    m_updateLabel->setToolTip(r.newer ? tr("You are running %1. Click to open the download page.").arg(current) : QString());
+    m_updateLabel->show();
 }
